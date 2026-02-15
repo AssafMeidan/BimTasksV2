@@ -1,0 +1,51 @@
+<Window x:Class="BimTasksV2.Views.SchedulePickerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Select Schedule"
+        Width="400"
+        Height="500"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResizeWithGrip"
+        ShowInTaskbar="False">
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0"
+                   x:Name="InstructionText"
+                   Text="Select a schedule:"
+                   FontWeight="SemiBold"
+                   Margin="0,0,0,8"/>
+
+        <TextBox Grid.Row="1"
+                 x:Name="SearchBox"
+                 Margin="0,0,0,8"
+                 Padding="4"
+                 TextChanged="SearchBox_TextChanged"/>
+
+        <ListBox Grid.Row="2"
+                 x:Name="ScheduleList"
+                 DisplayMemberPath="Name"
+                 SelectionMode="Single"
+                 MouseDoubleClick="ScheduleList_MouseDoubleClick"/>
+
+        <StackPanel Grid.Row="3"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,12,0,0">
+            <Button Content="OK"
+                    Width="80" Height="28"
+                    Margin="0,0,8,0"
+                    IsDefault="True"
+                    Click="OkButton_Click"/>
+            <Button Content="Cancel"
+                    Width="80" Height="28"
+                    IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

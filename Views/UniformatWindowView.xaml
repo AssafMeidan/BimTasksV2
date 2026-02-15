@@ -1,0 +1,64 @@
+<Window x:Class="BimTasksV2.Views.UniformatWindowView"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:prism="http://prismlibrary.com/"
+        prism:ViewModelLocator.AutoWireViewModel="True"
+        Title="Uniformat Generator (BimTasks)"
+        Height="600" Width="800"
+        WindowStartupLocation="CenterScreen">
+
+    <DockPanel Margin="12">
+        <!-- Right panel: selection + actions -->
+        <StackPanel DockPanel.Dock="Right" Width="240" Margin="8,0,0,0">
+            <TextBlock Text="Selection" FontWeight="Bold" Margin="0,0,0,8"/>
+            <TextBlock Text="Code:"/>
+            <TextBox Text="{Binding SelectedCode}" IsReadOnly="True" Margin="0,0,0,8"/>
+            <TextBlock Text="Name:"/>
+            <TextBox Text="{Binding SelectedName}" IsReadOnly="True" Margin="0,0,0,8"/>
+
+            <TextBlock Text="Scope (Types/Instances)" Margin="0,8,0,2"/>
+            <ComboBox ItemsSource="{Binding ScopeOptions}"
+                      SelectedItem="{Binding Scope}"
+                      Margin="0,0,0,8"/>
+
+            <TextBlock Text="Target (Selection/Categories)" Margin="0,8,0,2"/>
+            <ComboBox ItemsSource="{Binding TargetModeOptions}"
+                      SelectedItem="{Binding TargetMode}"
+                      Margin="0,0,0,8"/>
+
+            <Button Content="Ensure Parameters" Command="{Binding EnsureParamsCommand}" Margin="0,16,0,4"/>
+            <Button Content="Apply" Command="{Binding ApplyCommand}"/>
+        </StackPanel>
+
+        <!-- Left panel: search + tree -->
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,6">
+                <Button Content="Load Uniformat" Command="{Binding LoadCommand}" Margin="0,0,8,0"/>
+            </StackPanel>
+
+            <TextBox Grid.Row="1"
+                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                     Margin="0,0,0,6"
+                     Padding="4"/>
+
+            <TreeView Grid.Row="2" ItemsSource="{Binding Tree}">
+                <TreeView.ItemTemplate>
+                    <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding Code}" Width="120"/>
+                            <TextBlock Text=" - "/>
+                            <TextBlock Text="{Binding Name}"/>
+                            <Button Content="Select" Command="{Binding SelectCommand}" Margin="8,0,0,0"/>
+                        </StackPanel>
+                    </HierarchicalDataTemplate>
+                </TreeView.ItemTemplate>
+            </TreeView>
+        </Grid>
+    </DockPanel>
+</Window>

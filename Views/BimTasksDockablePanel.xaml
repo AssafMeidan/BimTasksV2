@@ -1,0 +1,42 @@
+<Page x:Class="BimTasksV2.Views.BimTasksDockablePanel"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:prism="http://prismlibrary.com/"
+      prism:ViewModelLocator.AutoWireViewModel="True"
+      d:DesignHeight="600" d:DesignWidth="350"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      mc:Ignorable="d"
+      Background="#FAFAFA">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header bar -->
+        <Border Grid.Row="0" Background="#1565C0" Padding="10,8">
+            <TextBlock Text="{Binding PanelTitle}"
+                       FontWeight="SemiBold" FontSize="14"
+                       Foreground="White"/>
+        </Border>
+
+        <!-- Dynamic content area -->
+        <ContentControl Grid.Row="1"
+                        Content="{Binding CurrentView}"
+                        HorizontalContentAlignment="Stretch"
+                        VerticalContentAlignment="Stretch"/>
+
+        <!-- Empty state when no view is loaded -->
+        <TextBlock Grid.Row="1"
+                   Text="Click a command in the BimTasks toolbar to display content here."
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   TextWrapping="Wrap"
+                   Foreground="#999"
+                   FontSize="13"
+                   Margin="20"
+                   Visibility="{Binding EmptyStateVisibility}"/>
+    </Grid>
+</Page>

@@ -1,0 +1,65 @@
+<Window x:Class="BimTasksV2.Views.CreateWindowFamiliesDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Create Window Types"
+        MinWidth="800" MinHeight="500"
+        Width="900" Height="600"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResizeWithGrip"
+        ShowInTaskbar="False">
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Family selector -->
+        <ComboBox Grid.Row="0" Grid.Column="0"
+                  x:Name="FamilyCombo"
+                  DisplayMemberPath="Name"
+                  ItemsSource="{Binding WindowFamilies}"
+                  SelectedItem="{Binding SelectedFamily, Mode=TwoWay}"
+                  Margin="0,0,8,8"
+                  Height="28"/>
+
+        <Button Grid.Row="0" Grid.Column="1"
+                Content="Duplicate Type"
+                Command="{Binding DuplicateTypeCommand}"
+                Width="110" Height="28"
+                Margin="0,0,8,8"/>
+
+        <Button Grid.Row="0" Grid.Column="2"
+                Content="OK" Width="75" Height="28"
+                IsDefault="True"
+                Margin="0,0,0,8"
+                Click="OkButton_Click"/>
+
+        <!-- Window types DataGrid -->
+        <DataGrid Grid.Row="1" Grid.ColumnSpan="3"
+                  AutoGenerateColumns="False"
+                  ItemsSource="{Binding WindowSymbols}"
+                  CanUserAddRows="False"
+                  Margin="0,0,0,8">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*"/>
+                <DataGridTextColumn Header="Width" Binding="{Binding Width}" Width="100"/>
+                <DataGridTextColumn Header="Height" Binding="{Binding Height}" Width="100"/>
+                <DataGridCheckBoxColumn Header="Updated" Binding="{Binding IsUpdated}" Width="80"/>
+                <DataGridTextColumn Header="Sill Height" Binding="{Binding DefaultSillHeight}" Width="100"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Selected family info -->
+        <TextBlock Grid.Row="2" Grid.ColumnSpan="3"
+                   Text="{Binding SelectedFamilyName}"
+                   FontStyle="Italic" Foreground="Gray"
+                   Margin="0,4,0,0"/>
+    </Grid>
+</Window>

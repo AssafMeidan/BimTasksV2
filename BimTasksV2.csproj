@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <Nullable>enable</Nullable>
+    <!-- Exclude docs from this project's default globbing -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);docs\**</DefaultItemExcludes>
+    <!-- Deploy to Revit addins subfolder after build -->
+    <RevitAddinDir>C:\ProgramData\Autodesk\Revit\Addins\2025\BimTasksV2</RevitAddinDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Revit hosts the process — App.xaml is a resource dictionary, not an application entry point -->
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="RevitAPI">
+      <HintPath>$(RevitApiPath)\RevitAPI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="RevitAPIUI">
+      <HintPath>$(RevitApiPath)\RevitAPIUI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.1.*" />
+    <PackageReference Include="EPPlus" Version="7.5.*" />
+    <PackageReference Include="NAudio" Version="2.*" />
+    <PackageReference Include="Prism.Unity" Version="9.0.*" />
+    <PackageReference Include="Vosk" Version="0.3.*" />
+    <PackageReference Include="Serilog" Version="4.*" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.*" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="8.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Update="Properties\Settings.Designer.cs">
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+  </ItemGroup>
+  <!-- Copy build output to Revit addins subfolder -->
+  <Target Name="DeployToRevit" AfterTargets="Build">
+    <ItemGroup>
+      <DeployFiles Include="$(OutputPath)**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DeployFiles)"
+          DestinationFolder="$(RevitAddinDir)\%(RecursiveDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+</Project>

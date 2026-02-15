@@ -1,0 +1,21 @@
+# Build output
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# NuGet
+packages/
+
+# Rider
+.idea/
+
+# OS files
+Thumbs.db
+Desktop.ini
+
+# Claude Code
+.claude/

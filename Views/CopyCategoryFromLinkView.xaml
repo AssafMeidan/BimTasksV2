@@ -1,0 +1,209 @@
+<Window x:Class="BimTasksV2.Views.CopyCategoryFromLinkView"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:prism="http://prismlibrary.com/"
+        prism:ViewModelLocator.AutoWireViewModel="True"
+        Title="Copy from Linked Model"
+        Height="550" Width="450"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResizeWithGrip"
+        MinHeight="450" MinWidth="350">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+
+        <Style x:Key="HeaderTextStyle" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,5"/>
+        </Style>
+
+        <Style x:Key="ComboBoxStyle" TargetType="ComboBox">
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Margin" Value="0,0,0,15"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <TextBlock Grid.Row="0"
+                   Text="Copy elements from a linked Revit model into the current project."
+                   TextWrapping="Wrap"
+                   Foreground="Gray"
+                   Margin="0,0,0,15"/>
+
+        <!-- 1. Link Selection -->
+        <TextBlock Grid.Row="1" Text="1. Select Linked Model:" Style="{StaticResource HeaderTextStyle}"/>
+        <ComboBox Grid.Row="2"
+                  ItemsSource="{Binding Links}"
+                  SelectedItem="{Binding SelectedLink}"
+                  DisplayMemberPath="Name"
+                  Style="{StaticResource ComboBoxStyle}"/>
+
+        <!-- 2. Category Selection -->
+        <TextBlock Grid.Row="3" Text="2. Select Category:" Style="{StaticResource HeaderTextStyle}"/>
+        <ComboBox Grid.Row="4"
+                  ItemsSource="{Binding Categories}"
+                  SelectedItem="{Binding SelectedCategory}"
+                  DisplayMemberPath="DisplayName"
+                  Style="{StaticResource ComboBoxStyle}"/>
+
+        <!-- 3. Family Selection -->
+        <TextBlock Grid.Row="5" Text="3. Filter by Family (optional):" Style="{StaticResource HeaderTextStyle}"/>
+        <ComboBox Grid.Row="6"
+                  ItemsSource="{Binding FamilyItems}"
+                  SelectedItem="{Binding SelectedFamily}"
+                  DisplayMemberPath="DisplayName"
+                  Style="{StaticResource ComboBoxStyle}"/>
+
+        <!-- 4. Type Selection -->
+        <Grid Grid.Row="7">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <DockPanel Grid.Row="0" Margin="0,0,0,5">
+                <TextBlock Text="4. Select Types:" Style="{StaticResource HeaderTextStyle}" DockPanel.Dock="Left"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="Select All"
+                            Command="{Binding SelectAllTypesCommand}"
+                            Width="70" Height="22"
+                            Margin="0,0,5,0"
+                            FontSize="11"/>
+                    <Button Content="Select None"
+                            Command="{Binding SelectNoneTypesCommand}"
+                            Width="70" Height="22"
+                            FontSize="11"/>
+                </StackPanel>
+            </DockPanel>
+
+            <Border Grid.Row="1" BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="3">
+                <ListBox ItemsSource="{Binding TypeItems}"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         BorderThickness="0"
+                         Background="White">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <CheckBox IsChecked="{Binding IsChecked}" Margin="4,2">
+                                <CheckBox.Content>
+                                    <TextBlock>
+                                        <Run Text="{Binding Name}"/>
+                                        <Run Text=" (" Foreground="Gray"/>
+                                        <Run Text="{Binding ElementCount}" Foreground="Gray"/>
+                                        <Run Text=")" Foreground="Gray"/>
+                                    </TextBlock>
+                                </CheckBox.Content>
+                            </CheckBox>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="Padding" Value="0"/>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                </ListBox>
+            </Border>
+        </Grid>
+
+        <!-- Status Bar -->
+        <Border Grid.Row="8"
+                Background="#F0F0F0"
+                BorderBrush="#CCCCCC"
+                BorderThickness="1"
+                CornerRadius="3"
+                Margin="0,15,0,0"
+                Padding="10,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Text="{Binding StatusMessage}"
+                           VerticalAlignment="Center"
+                           Foreground="#333333"/>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Selected: " Foreground="Gray"/>
+                    <TextBlock Text="{Binding SelectedElementCount}" FontWeight="SemiBold" Foreground="#0066CC"/>
+                    <TextBlock Text=" / " Foreground="Gray"/>
+                    <TextBlock Text="{Binding TotalElementCount}" Foreground="Gray"/>
+                    <TextBlock Text=" elements" Foreground="Gray"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Info Text -->
+        <TextBlock Grid.Row="9"
+                   Text="If Family is '&lt;All&gt;', all types in the category are copied."
+                   TextWrapping="Wrap"
+                   Foreground="Gray"
+                   FontStyle="Italic"
+                   Margin="0,10,0,0"
+                   FontSize="11"/>
+
+        <!-- Buttons -->
+        <Grid Grid.Row="10" Margin="0,15,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <Button Grid.Column="0"
+                    Content="Refresh"
+                    Command="{Binding RefreshCommand}"
+                    Width="80" Height="32"
+                    ToolTip="Reload links and categories"/>
+
+            <Button Grid.Column="2"
+                    Content="Cancel"
+                    Command="{Binding CancelCommand}"
+                    Width="90" Height="32"
+                    Margin="0,0,10,0"
+                    IsCancel="True"/>
+
+            <Button Grid.Column="3"
+                    Content="Copy Elements"
+                    Command="{Binding CopyCommand}"
+                    Width="110" Height="32"
+                    FontWeight="SemiBold"
+                    IsDefault="True">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedElementCount}" Value="0">
+                                <Setter Property="IsEnabled" Value="False"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+        </Grid>
+
+        <!-- Loading Overlay -->
+        <Border Grid.RowSpan="11"
+                Background="#80FFFFFF"
+                Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock Text="Loading..." FontSize="14" HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>
