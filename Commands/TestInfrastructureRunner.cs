@@ -182,10 +182,10 @@ namespace BimTasksV2.Commands.Handlers
                 TestStep("Can get SwitchDockablePanelEvent",
                     () => ea.GetEvent<BimTasksEvents.SwitchDockablePanelEvent>() != null);
 
-                TestStep("Can publish SwitchDockablePanelEvent (FilterTreeView)",
+                TestStep("Can publish SwitchDockablePanelEvent (FilterTree)",
                     () =>
                     {
-                        ea.GetEvent<BimTasksEvents.SwitchDockablePanelEvent>().Publish("FilterTreeView");
+                        ea.GetEvent<BimTasksEvents.SwitchDockablePanelEvent>().Publish("FilterTree");
                         return true;
                     });
             }

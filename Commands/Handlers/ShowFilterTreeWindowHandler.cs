@@ -28,7 +28,7 @@ namespace BimTasksV2.Commands.Handlers
 
                 // Switch dockable panel to FilterTreeView
                 eventAggregator.GetEvent<BimTasksEvents.SwitchDockablePanelEvent>()
-                    .Publish("FilterTreeView");
+                    .Publish("FilterTree");
 
                 // Reset the filter tree
                 eventAggregator.GetEvent<BimTasksEvents.ResetFilterTreeEvent>().Publish(null);

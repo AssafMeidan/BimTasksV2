@@ -21,6 +21,10 @@ namespace BimTasksV2.Infrastructure
         {
             Container = container;
             EventAggregator = container.Resolve<IEventAggregator>();
+
+            // Also initialize Prism's built-in ContainerLocator so that
+            // Prism internals (RegionManager, ViewModelLocator, etc.) can resolve services.
+            Prism.Ioc.ContainerLocator.SetContainerExtension(container);
         }
     }
 }

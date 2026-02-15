@@ -28,7 +28,7 @@ namespace BimTasksV2.Commands.Handlers
 
                 // Switch dockable panel to ElementCalculationView
                 eventAggregator.GetEvent<BimTasksEvents.SwitchDockablePanelEvent>()
-                    .Publish("ElementCalculationView");
+                    .Publish("ElementCalculation");
 
                 // Trigger calculation
                 eventAggregator.GetEvent<BimTasksEvents.CalculateElementsEvent>().Publish(null);

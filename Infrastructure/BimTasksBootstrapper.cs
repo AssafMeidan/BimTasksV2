@@ -68,6 +68,11 @@ namespace BimTasksV2.Infrastructure
             // Register views for region navigation
             RegisterViews(_container);
 
+            // Set the global static container locator EARLY — Prism internals
+            // (RegionAdapterMappings, behaviors, etc.) need ContainerLocator.Container
+            // to be set before they can resolve dependencies.
+            ContainerLocator.SetContainer(_container);
+
             // Wire up ViewModelLocator (view -> VM auto-resolve)
             ViewModelLocationProvider.SetDefaultViewModelFactory((view, type) =>
             {
@@ -104,9 +109,6 @@ namespace BimTasksV2.Infrastructure
                 regionBehaviorFactory.AddIfMissing<DestructibleRegionBehavior>(
                     DestructibleRegionBehavior.BehaviorKey);
             }
-
-            // Set the global static container locator
-            ContainerLocator.SetContainer(_container);
 
             Log.Information("BimTasksBootstrapper.Initialize() completed successfully.");
         }

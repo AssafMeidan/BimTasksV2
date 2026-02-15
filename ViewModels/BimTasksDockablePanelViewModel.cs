@@ -40,7 +40,7 @@ namespace BimTasksV2.ViewModels
         {
             var eventAgg = BimTasksV2.Infrastructure.ContainerLocator.EventAggregator;
             eventAgg.GetEvent<BimTasksEvents.SwitchDockablePanelEvent>()
-                .Subscribe(OnSwitchContent, ThreadOption.UIThread);
+                .Subscribe(OnSwitchContent, ThreadOption.PublisherThread);
         }
 
         private void OnSwitchContent(string viewKey)
