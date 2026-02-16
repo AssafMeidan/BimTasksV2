@@ -7,8 +7,9 @@
     <Nullable>enable</Nullable>
     <!-- Exclude docs from this project's default globbing -->
     <DefaultItemExcludes>$(DefaultItemExcludes);docs\**</DefaultItemExcludes>
-    <!-- Deploy to Revit addins subfolder after build -->
-    <RevitAddinDir>C:\ProgramData\Autodesk\Revit\Addins\2025\BimTasksV2</RevitAddinDir>
+    <!-- Deploy to Revit addins folder after build -->
+    <RevitAddinsRoot>C:\ProgramData\Autodesk\Revit\Addins\2025</RevitAddinsRoot>
+    <RevitAddinDir>$(RevitAddinsRoot)\BimTasksV2</RevitAddinDir>
   </PropertyGroup>
   <ItemGroup>
     <!-- Revit hosts the process — App.xaml is a resource dictionary, not an application entry point -->
@@ -50,9 +51,18 @@
   <Target Name="DeployToRevit" AfterTargets="Build">
     <ItemGroup>
       <DeployFiles Include="$(OutputPath)**\*.*" />
+      <VoskFiles Include="VoskModel\**\*.*" Exclude="VoskModel\*.zip" />
     </ItemGroup>
     <Copy SourceFiles="@(DeployFiles)"
           DestinationFolder="$(RevitAddinDir)\%(RecursiveDir)"
+          SkipUnchangedFiles="true" />
+    <!-- Copy VoskModel to plugin directory -->
+    <Copy SourceFiles="@(VoskFiles)"
+          DestinationFolder="$(RevitAddinDir)\VoskModel\%(RecursiveDir)"
+          SkipUnchangedFiles="true" />
+    <!-- Copy .addin manifest to Revit 2025 addins root -->
+    <Copy SourceFiles="BimTasksV2.addin"
+          DestinationFolder="$(RevitAddinsRoot)"
           SkipUnchangedFiles="true" />
   </Target>
 </Project>

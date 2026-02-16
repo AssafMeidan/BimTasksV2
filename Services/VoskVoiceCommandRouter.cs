@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using BimTasksV2.Events;
 using Prism.Events;
@@ -12,7 +13,6 @@ namespace BimTasksV2.Services
 {
     /// <summary>
     /// Maps recognized Vosk voice inputs to Revit PostableCommand or custom BimTasksV2 actions.
-    /// Contains ~145 voice command mappings and 4 custom event-based commands.
     /// Uses System.Text.Json for grammar generation (not Newtonsoft.Json).
     /// </summary>
     public static class VoskVoiceCommandRouter
@@ -176,18 +176,103 @@ namespace BimTasksV2.Services
             // --- UNDO / REDO ---
             { "redo", PostableCommand.Redo },
             { "undo", PostableCommand.Undo },
+
+            // --- REVIT 2025 NEW COMMANDS ---
+            { "toposolid", PostableCommand.Toposolid },
+            { "toposolid by face", PostableCommand.ToposolidByFace },
+            { "graded region", PostableCommand.GradedRegion },
+            { "smooth shading", PostableCommand.ToposolidSmoothShading },
+            { "coordination model", PostableCommand.CoordinationModelAutodeskDocs },
+            { "coordination local", PostableCommand.CoordinationModelLocal },
+            { "shared views", PostableCommand.SharedViews },
+            { "canvas theme", PostableCommand.CanvasTheme },
+            { "show warnings in views", PostableCommand.ShowWarningsInViews },
+
+            // --- VIEW TOOLS ---
+            { "camera", PostableCommand.Camera },
+            { "render", PostableCommand.Render },
+            { "thin lines", PostableCommand.ThinLines },
+            { "duplicate view", PostableCommand.DuplicateView },
+            { "duplicate with detailing", PostableCommand.DuplicateWithDetailing },
+            { "selection box", PostableCommand.SelectionBox },
+            { "scope box", PostableCommand.ScopeBox },
+            { "reflected ceiling", PostableCommand.ReflectedCeilingPlan },
+            { "legend", PostableCommand.Legend },
+            { "hide elements", PostableCommand.HideElements },
+            { "hide category", PostableCommand.HideCategory },
+            { "reveal hidden", PostableCommand.ToggleRevealHiddenElementsMode },
+
+            // --- EXPORT / IMPORT / LINK ---
+            { "export pdf", PostableCommand.ExportPDF },
+            { "import image", PostableCommand.ImportImage },
+            { "import pdf", PostableCommand.ImportPDF },
+            { "link revit", PostableCommand.LinkRevit },
+            { "link cad", PostableCommand.LinkCAD },
+            { "print", PostableCommand.Print },
+
+            // --- AUTOMATION ---
+            { "dynamo", PostableCommand.Dynamo },
+            { "dynamo player", PostableCommand.DynamoPlayer },
+            { "synchronize", PostableCommand.SynchronizeNow },
+            { "review warnings", PostableCommand.ReviewWarnings },
+            { "interference check", PostableCommand.RunInterferenceCheck },
+
+            // --- ADDITIONAL MODELING ---
+            { "curtain grid", PostableCommand.CurtainGrid },
+            { "mullion", PostableCommand.CurtainWallMullion },
+            { "model in place", PostableCommand.ModelInPlace },
+            { "shaft opening", PostableCommand.ShaftOpening },
+            { "wall opening", PostableCommand.WallOpening },
+            { "structural floor", PostableCommand.StructuralFloor },
+            { "structural wall", PostableCommand.StructuralWall },
+            { "rebar", PostableCommand.StructuralRebar },
+            { "split face", PostableCommand.SplitFace },
+            { "linework", PostableCommand.Linework },
+            { "point cloud", PostableCommand.PointCloud },
+
+            // --- PROJECT SETTINGS ---
+            { "project units", PostableCommand.ProjectUnits },
+            { "project info", PostableCommand.ProjectInformation },
+            { "sun settings", PostableCommand.SunSettings },
+
+            // --- CONTEXT PANEL ---
+            { "sweep wall", PostableCommand.SweepWall },
+            { "reveal wall", PostableCommand.RevealWall },
+            { "filter", PostableCommand.Filters },
+
+            // --- MISC ---
+            { "keyboard shortcuts", PostableCommand.KeyboardShortcuts },
+            { "shortcuts", PostableCommand.KeyboardShortcuts },
+            { "add autodesk family", PostableCommand.LoadAutodeskFamily },
+            { "autodesk family", PostableCommand.LoadAutodeskFamily },
+            { "temporary dimensions", PostableCommand.TemporaryDimensions },
+            { "manage images", PostableCommand.ManageImages },
+            { "design options", PostableCommand.DesignOptions },
+            { "edit filters", PostableCommand.Filters },
         };
 
         /// <summary>
-        /// Custom commands handled via Prism events (not PostableCommand).
-        /// These trigger BimTasksV2 internal functionality.
+        /// Custom commands that receive UIApplication for direct API access.
+        /// These trigger BimTasksV2 internal functionality or Revit view operations.
         /// </summary>
-        private static readonly Dictionary<string, Action> _customCommands = new(StringComparer.OrdinalIgnoreCase)
+        private static readonly Dictionary<string, Action<UIApplication>> _customCommands = new(StringComparer.OrdinalIgnoreCase)
         {
-            { "filter tree", PublishShowFilterTree },
-            { "show filter", PublishShowFilterTree },
-            { "search tree", PublishShowFilterTree },
-            { "find element", PublishShowFilterTree },
+            { "filter tree", ShowFilterTreeInPanel },
+            { "show filter", ShowFilterTreeInPanel },
+            { "search tree", ShowFilterTreeInPanel },
+            { "find element", ShowFilterTreeInPanel },
+
+            // Calculate totals in dockable panel
+            { "calculate totals", ShowCalculateTotalsInPanel },
+            { "calc totals", ShowCalculateTotalsInPanel },
+            { "area volume", ShowCalculateTotalsInPanel },
+
+            // Temporary hide / isolate
+            { "temporary hide", TempHideElements },
+            { "temporary isolate", TempIsolateElements },
+            { "reset temporary", ResetTempHideIsolate },
+            { "hide category temporary", TempHideCategories },
+            { "isolate category temporary", TempIsolateCategories },
         };
 
         #region Public API
@@ -198,9 +283,9 @@ namespace BimTasksV2.Services
         /// </summary>
         /// <param name="text">The recognized voice text (trimmed, lowercase).</param>
         /// <param name="cmd">The PostableCommand if matched, null otherwise.</param>
-        /// <param name="customAction">The custom Action if matched, null otherwise.</param>
+        /// <param name="customAction">The custom Action (receives UIApplication) if matched, null otherwise.</param>
         /// <returns>True if the command was recognized.</returns>
-        public static bool TryGetCommand(string text, out PostableCommand? cmd, out Action customAction)
+        public static bool TryGetCommand(string text, out PostableCommand? cmd, out Action<UIApplication> customAction)
         {
             cmd = null;
             customAction = null;
@@ -278,18 +363,118 @@ namespace BimTasksV2.Services
 
         #region Custom Command Handlers
 
-        private static void PublishShowFilterTree()
+        private static void ShowFilterTreeInPanel(UIApplication uiApp)
         {
             try
             {
+                var container = BimTasksV2.Infrastructure.ContainerLocator.Container;
+                var contextService = container.Resolve<IRevitContextService>();
+                contextService.UIApplication = uiApp;
+                contextService.UIDocument = uiApp.ActiveUIDocument;
+
                 var eventAgg = BimTasksV2.Infrastructure.ContainerLocator.EventAggregator;
+                eventAgg.GetEvent<BimTasksEvents.SwitchDockablePanelEvent>().Publish("FilterTree");
                 eventAgg.GetEvent<BimTasksEvents.ResetFilterTreeEvent>().Publish(null);
-                Log.Information("Published ResetFilterTreeEvent via voice command");
+
+                ShowDockablePane(uiApp);
+                Log.Information("Voice: opened Filter Tree in dockable panel");
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Failed to publish filter tree event from voice command");
+                Log.Error(ex, "Failed to show filter tree via voice command");
             }
+        }
+
+        private static void ShowCalculateTotalsInPanel(UIApplication uiApp)
+        {
+            try
+            {
+                var container = BimTasksV2.Infrastructure.ContainerLocator.Container;
+                var contextService = container.Resolve<IRevitContextService>();
+                contextService.UIApplication = uiApp;
+                contextService.UIDocument = uiApp.ActiveUIDocument;
+
+                var eventAgg = BimTasksV2.Infrastructure.ContainerLocator.EventAggregator;
+                eventAgg.GetEvent<BimTasksEvents.SwitchDockablePanelEvent>().Publish("ElementCalculation");
+                eventAgg.GetEvent<BimTasksEvents.CalculateElementsEvent>().Publish(null);
+
+                ShowDockablePane(uiApp);
+                Log.Information("Voice: opened Calculate Totals in dockable panel");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to show calculate totals via voice command");
+            }
+        }
+
+        private static void ShowDockablePane(UIApplication uiApp)
+        {
+            var paneId = BimTasksApp.DockablePaneId;
+            if (paneId != null)
+            {
+                var pane = uiApp.GetDockablePane(paneId);
+                if (pane != null && !pane.IsShown())
+                    pane.Show();
+            }
+        }
+
+        private static void TempHideElements(UIApplication uiApp)
+        {
+            var uidoc = uiApp.ActiveUIDocument;
+            if (uidoc == null) return;
+            var ids = uidoc.Selection.GetElementIds();
+            if (ids.Count == 0) { Log.Warning("Temporary hide: no elements selected"); return; }
+            uidoc.ActiveView.HideElementsTemporary(ids);
+        }
+
+        private static void TempIsolateElements(UIApplication uiApp)
+        {
+            var uidoc = uiApp.ActiveUIDocument;
+            if (uidoc == null) return;
+            var ids = uidoc.Selection.GetElementIds();
+            if (ids.Count == 0) { Log.Warning("Temporary isolate: no elements selected"); return; }
+            uidoc.ActiveView.IsolateElementsTemporary(ids);
+        }
+
+        private static void ResetTempHideIsolate(UIApplication uiApp)
+        {
+            var uidoc = uiApp.ActiveUIDocument;
+            if (uidoc == null) return;
+            uidoc.ActiveView.DisableTemporaryViewMode(TemporaryViewMode.TemporaryHideIsolate);
+        }
+
+        private static void TempHideCategories(UIApplication uiApp)
+        {
+            var uidoc = uiApp.ActiveUIDocument;
+            if (uidoc == null) return;
+            var ids = uidoc.Selection.GetElementIds();
+            if (ids.Count == 0) { Log.Warning("Temporary hide category: no elements selected"); return; }
+            var catIds = new HashSet<ElementId>();
+            foreach (var id in ids)
+            {
+                var elem = uidoc.Document.GetElement(id);
+                if (elem?.Category != null)
+                    catIds.Add(elem.Category.Id);
+            }
+            if (catIds.Count > 0)
+                uidoc.ActiveView.HideCategoriesTemporary(catIds);
+        }
+
+        private static void TempIsolateCategories(UIApplication uiApp)
+        {
+            var uidoc = uiApp.ActiveUIDocument;
+            if (uidoc == null) return;
+            var ids = uidoc.Selection.GetElementIds();
+            if (ids.Count == 0) { Log.Warning("Temporary isolate category: no elements selected"); return; }
+            var catIds = new HashSet<ElementId>();
+            foreach (var id in ids)
+            {
+                var elem = uidoc.Document.GetElement(id);
+                if (elem?.Category != null)
+                    catIds.Add(elem.Category.Id);
+            }
+            if (catIds.Count > 0)
+                uidoc.ActiveView.IsolateCategoriesTemporary(catIds);
         }
 
         #endregion

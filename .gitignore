@@ -19,3 +19,7 @@ Desktop.ini
 
 # Claude Code
 .claude/
+
+# Vosk model binaries (too large for git — deploy via build)
+VoskModel/vosk-model-*/
+VoskModel/*.zip

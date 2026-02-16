@@ -6,7 +6,7 @@ namespace BimTasksV2.Ribbon
     /// <summary>
     /// Builds the BimTasks ribbon tab with 5 domain-based panels.
     /// Called from BimTasksApp.OnStartup (default ALC — no Prism/Unity refs).
-    /// Button images are not set (no icons bundled yet).
+    /// Icons are generated at runtime by <see cref="IconGenerator"/>.
     /// </summary>
     public static class RibbonBuilder
     {
@@ -83,7 +83,10 @@ namespace BimTasksV2.Ribbon
 
             try
             {
-                return panel.AddItem(data) as PushButton;
+                var btn = panel.AddItem(data) as PushButton;
+                if (btn != null)
+                    ApplyIcon(btn, def.Name);
+                return btn;
             }
             catch (Exception)
             {
@@ -116,7 +119,9 @@ namespace BimTasksV2.Ribbon
 
                     try
                     {
-                        splitButton.AddPushButton(btnData);
+                        var pb = splitButton.AddPushButton(btnData);
+                        if (pb != null)
+                            ApplyIcon(pb, member.Name);
                     }
                     catch (Exception)
                     {
@@ -132,6 +137,14 @@ namespace BimTasksV2.Ribbon
                     AddPushButton(panel, members[0], assemblyPath);
                 }
             }
+        }
+
+        private static void ApplyIcon(RibbonButton btn, string name)
+        {
+            var large = IconGenerator.GetIcon(name, 32);
+            var small = IconGenerator.GetIcon(name, 16);
+            if (large != null) btn.LargeImage = large;
+            if (small != null) btn.Image = small;
         }
     }
 }

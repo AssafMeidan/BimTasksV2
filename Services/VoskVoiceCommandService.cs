@@ -94,8 +94,8 @@ namespace BimTasksV2.Services
                     string modelPath = FindModelPath();
                     if (string.IsNullOrEmpty(modelPath) || !Directory.Exists(modelPath))
                     {
-                        Log.Error("Vosk model not found. Searched: %APPDATA%/BimTasks/VoskModel/ and plugin directory.");
-                        throw new DirectoryNotFoundException("Vosk model not found. Place the model in %APPDATA%/BimTasks/VoskModel/");
+                        Log.Error("Vosk model not found. Expected in {PluginDir}/VoskModel/");
+                        throw new DirectoryNotFoundException("Vosk model not found. Place the model in the VoskModel folder next to the plugin DLL.");
                     }
 
                     // Initialize Vosk model
@@ -172,45 +172,26 @@ namespace BimTasksV2.Services
         #region Model Path Resolution
 
         /// <summary>
-        /// Finds the Vosk model directory. Checks:
-        /// 1. %APPDATA%/BimTasks/VoskModel/ (user-specific, preferred)
-        /// 2. {PluginDir}/VoskModel/ (bundled with plugin)
+        /// Finds the Vosk model directory in {PluginDir}/VoskModel/.
         /// Returns null if not found.
         /// </summary>
         private string FindModelPath()
         {
-            // Check %APPDATA%/BimTasks/VoskModel/
-            string appDataPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "BimTasks", "VoskModel");
-
-            if (Directory.Exists(appDataPath))
-            {
-                // Look for a model directory inside (e.g., vosk-model-small-en-us-0.15)
-                var modelDirs = Directory.GetDirectories(appDataPath, "vosk-model*");
-                if (modelDirs.Length > 0)
-                    return modelDirs[0];
-
-                // If the directory itself contains model files
-                if (File.Exists(Path.Combine(appDataPath, "am", "final.mdl")) ||
-                    File.Exists(Path.Combine(appDataPath, "conf", "model.conf")))
-                    return appDataPath;
-            }
-
-            // Check plugin directory
             string pluginDir = Path.GetDirectoryName(typeof(VoskVoiceCommandService).Assembly.Location);
             if (!string.IsNullOrEmpty(pluginDir))
             {
-                string pluginModelPath = Path.Combine(pluginDir, "VoskModel");
-                if (Directory.Exists(pluginModelPath))
+                string modelPath = Path.Combine(pluginDir, "VoskModel");
+                if (Directory.Exists(modelPath))
                 {
-                    var modelDirs = Directory.GetDirectories(pluginModelPath, "vosk-model*");
+                    // Look for a model subdirectory (e.g., vosk-model-small-en-us-0.15)
+                    var modelDirs = Directory.GetDirectories(modelPath, "vosk-model*");
                     if (modelDirs.Length > 0)
                         return modelDirs[0];
 
-                    if (File.Exists(Path.Combine(pluginModelPath, "am", "final.mdl")) ||
-                        File.Exists(Path.Combine(pluginModelPath, "conf", "model.conf")))
-                        return pluginModelPath;
+                    // The directory itself may contain model files directly
+                    if (File.Exists(Path.Combine(modelPath, "am", "final.mdl")) ||
+                        File.Exists(Path.Combine(modelPath, "conf", "model.conf")))
+                        return modelPath;
                 }
             }
 
@@ -331,7 +312,7 @@ namespace BimTasksV2.Services
                     }
                     else if (customAction != null)
                     {
-                        customAction.Invoke();
+                        customAction.Invoke(_uiApp);
                         Log.Information("Executed custom command via voice: '{Command}'", text);
                         OnCommandExecuted?.Invoke(text);
                     }
