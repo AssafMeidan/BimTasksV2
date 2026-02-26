@@ -14,6 +14,11 @@ namespace BimTasksV2.Helpers.WallSplitter
         public bool Success { get; set; }
         public string Message { get; set; } = "";
         public List<Wall> ReplacementWalls { get; set; } = new();
+        /// <summary>
+        /// Replacement walls paired with their layer info, preserving layer order
+        /// (exterior→interior). Used by cross-join to prioritize matching types/positions.
+        /// </summary>
+        public List<(Wall Wall, LayerInfo Layer)> ReplacementPairs { get; set; } = new();
         public int TransferredElementCount { get; set; }
     }
 
@@ -175,6 +180,7 @@ namespace BimTasksV2.Helpers.WallSplitter
                     Success = true,
                     Message = $"Split into {replacements.Count} walls. Transferred {transferredCount} hosted element(s).",
                     ReplacementWalls = replacements.Select(r => r.Wall).ToList(),
+                    ReplacementPairs = replacements,
                     TransferredElementCount = transferredCount
                 };
 
@@ -242,13 +248,15 @@ namespace BimTasksV2.Helpers.WallSplitter
 
             // Cross-join pass: connect replacement walls from different original walls
             // at corners and intersections (needed because original neighbor IDs become
-            // invalid after the neighbor is also split)
-            var allReplacements = results
+            // invalid after the neighbor is also split).
+            // Uses prioritized joining: same WallType first, then same layer position,
+            // then remaining pairs.
+            var allPairs = results
                 .Where(r => r.Success)
-                .SelectMany(r => r.ReplacementWalls)
+                .SelectMany(r => r.ReplacementPairs)
                 .ToList();
 
-            if (allReplacements.Count > 1)
+            if (allPairs.Count > 1)
             {
                 try
                 {
@@ -258,7 +266,7 @@ namespace BimTasksV2.Helpers.WallSplitter
                     txCrossJoin.SetFailureHandlingOptions(failOpts);
                     txCrossJoin.Start();
 
-                    WallJoinReplicator.CrossJoinReplacements(doc, allReplacements);
+                    WallJoinReplicator.CrossJoinReplacements(doc, allPairs);
 
                     txCrossJoin.Commit();
                 }

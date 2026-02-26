@@ -123,41 +123,97 @@ namespace BimTasksV2.Helpers.WallSplitter
         }
 
         /// <summary>
-        /// Joins all replacement walls from different original walls to each other.
-        /// Called after batch splitting to establish cross-wall joins.
+        /// Joins replacement walls from different original walls using prioritized order:
+        /// 1. Same WallType — materials merge cleanly at corners
+        /// 2. Same layer position (outer↔outer, inner↔inner) — architecturally logical
+        /// 3. Remaining pairs — last resort for any missed overlaps
         /// </summary>
         /// <param name="doc">The Revit document.</param>
-        /// <param name="allReplacementWalls">All replacement walls from all split operations.</param>
-        public static void CrossJoinReplacements(Document doc, List<Wall> allReplacementWalls)
+        /// <param name="allPairs">All replacement walls with their layer info from all split operations.</param>
+        public static void CrossJoinReplacements(Document doc, List<(Wall Wall, LayerInfo Layer)> allPairs)
         {
-            if (allReplacementWalls == null || allReplacementWalls.Count < 2)
+            if (allPairs == null || allPairs.Count < 2)
                 return;
 
-            // Try geometry-joining every pair (Revit will reject non-overlapping pairs)
-            for (int i = 0; i < allReplacementWalls.Count; i++)
+            var joined = new HashSet<(ElementId, ElementId)>();
+
+            // Pass 1: Same WallType — these merge cleanly (same material/thickness)
+            for (int i = 0; i < allPairs.Count; i++)
             {
-                for (int j = i + 1; j < allReplacementWalls.Count; j++)
+                for (int j = i + 1; j < allPairs.Count; j++)
                 {
-                    try
+                    if (allPairs[i].Wall.WallType.Id == allPairs[j].Wall.WallType.Id)
                     {
-                        if (!JoinGeometryUtils.AreElementsJoined(doc, allReplacementWalls[i], allReplacementWalls[j]))
-                        {
-                            JoinGeometryUtils.JoinGeometry(doc, allReplacementWalls[i], allReplacementWalls[j]);
-                        }
-                    }
-                    catch
-                    {
-                        // Expected for non-overlapping walls — skip silently
+                        if (TryJoin(doc, allPairs[i].Wall, allPairs[j].Wall))
+                            joined.Add(OrderIds(allPairs[i].Wall.Id, allPairs[j].Wall.Id));
                     }
                 }
             }
 
-            // Toggle end joins on all walls to force Revit corner cleanup
-            foreach (var wall in allReplacementWalls)
+            // Pass 2: Same layer position (index) — outer↔outer, inner↔inner
+            for (int i = 0; i < allPairs.Count; i++)
             {
-                ForceEndJoinRecalculation(wall, 0);
-                ForceEndJoinRecalculation(wall, 1);
+                for (int j = i + 1; j < allPairs.Count; j++)
+                {
+                    var key = OrderIds(allPairs[i].Wall.Id, allPairs[j].Wall.Id);
+                    if (joined.Contains(key))
+                        continue;
+
+                    if (allPairs[i].Layer.Index == allPairs[j].Layer.Index)
+                    {
+                        if (TryJoin(doc, allPairs[i].Wall, allPairs[j].Wall))
+                            joined.Add(key);
+                    }
+                }
             }
+
+            // Pass 3: Remaining pairs — catch any overlapping geometry we missed
+            for (int i = 0; i < allPairs.Count; i++)
+            {
+                for (int j = i + 1; j < allPairs.Count; j++)
+                {
+                    var key = OrderIds(allPairs[i].Wall.Id, allPairs[j].Wall.Id);
+                    if (joined.Contains(key))
+                        continue;
+
+                    TryJoin(doc, allPairs[i].Wall, allPairs[j].Wall);
+                }
+            }
+
+            // Toggle end joins on all walls to force Revit corner cleanup
+            foreach (var pair in allPairs)
+            {
+                ForceEndJoinRecalculation(pair.Wall, 0);
+                ForceEndJoinRecalculation(pair.Wall, 1);
+            }
+        }
+
+        /// <summary>
+        /// Attempts to geometry-join two walls. Returns true if successful.
+        /// </summary>
+        private static bool TryJoin(Document doc, Wall a, Wall b)
+        {
+            try
+            {
+                if (!JoinGeometryUtils.AreElementsJoined(doc, a, b))
+                {
+                    JoinGeometryUtils.JoinGeometry(doc, a, b);
+                    return true;
+                }
+                return true; // Already joined
+            }
+            catch
+            {
+                return false; // Non-overlapping or incompatible — expected
+            }
+        }
+
+        /// <summary>
+        /// Returns a canonical ordered pair of ElementIds for use as a HashSet key.
+        /// </summary>
+        private static (ElementId, ElementId) OrderIds(ElementId a, ElementId b)
+        {
+            return a.Value < b.Value ? (a, b) : (b, a);
         }
 
         /// <summary>
