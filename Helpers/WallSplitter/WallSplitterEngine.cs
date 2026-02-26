@@ -195,6 +195,8 @@ namespace BimTasksV2.Helpers.WallSplitter
 
         /// <summary>
         /// Splits multiple walls that share the same wall type, re-analyzing layers per wall.
+        /// After all individual splits, performs a cross-join pass to connect replacement
+        /// walls from different original walls at corners/intersections.
         /// </summary>
         /// <param name="doc">The Revit document.</param>
         /// <param name="walls">The walls to split (should share the same compound wall type).</param>
@@ -235,6 +237,34 @@ namespace BimTasksV2.Helpers.WallSplitter
                         Success = false,
                         Message = $"Wall {wall.Id}: {ex.Message}"
                     });
+                }
+            }
+
+            // Cross-join pass: connect replacement walls from different original walls
+            // at corners and intersections (needed because original neighbor IDs become
+            // invalid after the neighbor is also split)
+            var allReplacements = results
+                .Where(r => r.Success)
+                .SelectMany(r => r.ReplacementWalls)
+                .ToList();
+
+            if (allReplacements.Count > 1)
+            {
+                try
+                {
+                    using var txCrossJoin = new Transaction(doc, "Cross-Join Split Walls");
+                    var failOpts = txCrossJoin.GetFailureHandlingOptions();
+                    failOpts.SetFailuresPreprocessor(new SuppressWarningsPreprocessor());
+                    txCrossJoin.SetFailureHandlingOptions(failOpts);
+                    txCrossJoin.Start();
+
+                    WallJoinReplicator.CrossJoinReplacements(doc, allReplacements);
+
+                    txCrossJoin.Commit();
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "[WallSplitterEngine] Cross-join pass failed (non-critical)");
                 }
             }
 

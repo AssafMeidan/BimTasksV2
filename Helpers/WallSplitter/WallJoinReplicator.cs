@@ -49,7 +49,7 @@ namespace BimTasksV2.Helpers.WallSplitter
         /// <summary>
         /// Replicates the original wall's join state onto the replacement walls.
         /// Joins adjacent replacement walls to each other, re-joins them to original
-        /// neighbors, and restores end-join allow/disallow states.
+        /// neighbors, and toggles end joins on all replacements to force Revit corner cleanup.
         /// </summary>
         /// <param name="doc">The Revit document.</param>
         /// <param name="replacementWalls">Replacement walls in order (start-to-end of original).</param>
@@ -59,7 +59,7 @@ namespace BimTasksV2.Helpers.WallSplitter
             if (replacementWalls == null || replacementWalls.Count == 0)
                 return;
 
-            // 1. Join adjacent replacement walls to each other
+            // 1. Join adjacent replacement walls to each other (geometry join for overlapping layers)
             for (int i = 0; i < replacementWalls.Count - 1; i++)
             {
                 try
@@ -74,12 +74,12 @@ namespace BimTasksV2.Helpers.WallSplitter
                 }
             }
 
-            // 2. Re-join each replacement wall to original geometry-joined neighbors
+            // 2. Re-join each replacement wall to original geometry-joined neighbors (if they still exist)
             foreach (var neighborId in record.GeometryJoinedElements)
             {
                 var neighbor = doc.GetElement(neighborId);
                 if (neighbor == null)
-                    continue; // Original wall was deleted or neighbor no longer exists
+                    continue; // Neighbor was deleted (e.g., also split in batch mode)
 
                 foreach (var replacement in replacementWalls)
                 {
@@ -99,11 +99,83 @@ namespace BimTasksV2.Helpers.WallSplitter
                 }
             }
 
-            // 3. Restore end-join states on the first and last replacement walls
-            RestoreEndJoinState(replacementWalls[0], 0, record.AllowJoinAtStart);
+            // 3. Toggle end joins on ALL replacement walls at BOTH ends to force Revit
+            //    to recalculate corner geometry. This makes Revit detect nearby walls
+            //    and form clean L/T intersections.
+            foreach (var wall in replacementWalls)
+            {
+                ForceEndJoinRecalculation(wall, 0);
+                ForceEndJoinRecalculation(wall, 1);
+            }
 
-            var lastWall = replacementWalls[replacementWalls.Count - 1];
-            RestoreEndJoinState(lastWall, 1, record.AllowJoinAtEnd);
+            // 4. Restore original end-join states on outermost ends
+            //    (if original had joins disallowed, preserve that)
+            if (!record.AllowJoinAtStart)
+            {
+                foreach (var wall in replacementWalls)
+                    RestoreEndJoinState(wall, 0, false);
+            }
+            if (!record.AllowJoinAtEnd)
+            {
+                foreach (var wall in replacementWalls)
+                    RestoreEndJoinState(wall, 1, false);
+            }
+        }
+
+        /// <summary>
+        /// Joins all replacement walls from different original walls to each other.
+        /// Called after batch splitting to establish cross-wall joins.
+        /// </summary>
+        /// <param name="doc">The Revit document.</param>
+        /// <param name="allReplacementWalls">All replacement walls from all split operations.</param>
+        public static void CrossJoinReplacements(Document doc, List<Wall> allReplacementWalls)
+        {
+            if (allReplacementWalls == null || allReplacementWalls.Count < 2)
+                return;
+
+            // Try geometry-joining every pair (Revit will reject non-overlapping pairs)
+            for (int i = 0; i < allReplacementWalls.Count; i++)
+            {
+                for (int j = i + 1; j < allReplacementWalls.Count; j++)
+                {
+                    try
+                    {
+                        if (!JoinGeometryUtils.AreElementsJoined(doc, allReplacementWalls[i], allReplacementWalls[j]))
+                        {
+                            JoinGeometryUtils.JoinGeometry(doc, allReplacementWalls[i], allReplacementWalls[j]);
+                        }
+                    }
+                    catch
+                    {
+                        // Expected for non-overlapping walls — skip silently
+                    }
+                }
+            }
+
+            // Toggle end joins on all walls to force Revit corner cleanup
+            foreach (var wall in allReplacementWalls)
+            {
+                ForceEndJoinRecalculation(wall, 0);
+                ForceEndJoinRecalculation(wall, 1);
+            }
+        }
+
+        /// <summary>
+        /// Toggles end join off then on to force Revit to recalculate the
+        /// wall join geometry at a specific end. This triggers Revit's automatic
+        /// detection of nearby walls and forms clean L/T corner intersections.
+        /// </summary>
+        private static void ForceEndJoinRecalculation(Wall wall, int end)
+        {
+            try
+            {
+                WallUtils.DisallowWallJoinAtEnd(wall, end);
+                WallUtils.AllowWallJoinAtEnd(wall, end);
+            }
+            catch
+            {
+                // Non-critical — wall may not support end joins
+            }
         }
 
         /// <summary>
