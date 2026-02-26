@@ -33,4 +33,8 @@ namespace BimTasksV2.Commands.Proxies
     [Transaction(TransactionMode.Manual)]
     public class CreateWindowFamiliesCommand : Infrastructure.ProxyCommand
     { protected override string HandlerTypeName => "CreateWindowFamiliesHandler"; }
+
+    [Transaction(TransactionMode.Manual)]
+    public class SplitWallCommand : Infrastructure.ProxyCommand
+    { protected override string HandlerTypeName => "SplitWallHandler"; }
 }

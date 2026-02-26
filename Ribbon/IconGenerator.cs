@@ -45,6 +45,7 @@ namespace BimTasksV2.Ribbon
             ["btnCopyLinkedWalls"]      = (WallBg, DrawCopyRects),
             ["btnAdjustWallHeight"]     = (WallBg, DrawWallFloor),
             ["btnChangeWallHeight"]     = (WallBg, DrawWallHeight),
+            ["btnSplitWall"]            = (WallBg, DrawSplitWall),
             ["btnAddChipuyToWall"]      = (WallBg, DrawCladding),
             ["btnAddChipuyExternal"]    = (WallBg, dc => { DrawCladding(dc); Label(dc, "E", 22); }),
             ["btnAddChipuyInternal"]    = (WallBg, dc => { DrawCladding(dc); Label(dc, "I", 23); }),
@@ -174,6 +175,17 @@ namespace BimTasksV2.Ribbon
             // Wall with cladding layer
             dc.DrawRectangle(White, null, new Rect(10, 7, 5, 18));
             dc.DrawRectangle(null, Thick, new Rect(16, 7, 3, 18));
+        }
+
+        private static void DrawSplitWall(DrawingContext dc)
+        {
+            // Wall splitting into layers: one thick rect splitting into two thin rects
+            dc.DrawRectangle(White, null, new Rect(8, 7, 3, 18));
+            dc.DrawRectangle(White, null, new Rect(14, 7, 3, 18));
+            dc.DrawRectangle(White, null, new Rect(20, 7, 3, 18));
+            // Horizontal arrows between layers
+            dc.DrawLine(Thin, new Point(11, 16), new Point(14, 16));
+            dc.DrawLine(Thin, new Point(17, 16), new Point(20, 16));
         }
 
         private static void DrawWindow(DrawingContext dc)

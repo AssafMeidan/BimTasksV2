@@ -21,7 +21,7 @@ namespace BimTasksV2.Ribbon
         public const string ToolPanel = "Tools";
 
         // =====================================================================
-        // Panel 1: Walls (8 buttons)
+        // Panel 1: Walls (9 buttons)
         // =====================================================================
 
         public static readonly ButtonDef[] WallButtons = new[]
@@ -46,6 +46,11 @@ namespace BimTasksV2.Ribbon
                 "Wall\nHeight",
                 "BimTasksV2.Commands.Proxies.ChangeWallHeightCommand"),
 
+            new ButtonDef(
+                "btnSplitWall",
+                "Split\nWall",
+                "BimTasksV2.Commands.Proxies.SplitWallCommand"),
+
             // Cladding split button members (added as SplitButton in RibbonBuilder)
             new ButtonDef(
                 "btnAddChipuyToWall",
@@ -69,8 +74,8 @@ namespace BimTasksV2.Ribbon
         };
 
         // Indices into WallButtons for the cladding SplitButton
-        public const int CladdingSplitStart = 4; // AddChipuyToWall
-        public const int CladdingSplitEnd = 6;   // AddChipuyToInternal (inclusive)
+        public const int CladdingSplitStart = 5; // AddChipuyToWall
+        public const int CladdingSplitEnd = 7;   // AddChipuyToInternal (inclusive)
 
         // =====================================================================
         // Panel 2: Structure (2 buttons)
