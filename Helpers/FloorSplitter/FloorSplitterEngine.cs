@@ -22,11 +22,11 @@ namespace BimTasksV2.Helpers.FloorSplitter
     /// </summary>
     public class FloorSlopeData
     {
-        /// <summary>Slope arrow line for Floor.Create (null if no slope arrow).</summary>
+        /// <summary>Slope arrow line (null if no slope arrow).</summary>
         public Line? SlopeArrow { get; set; }
 
-        /// <summary>Slope angle in radians for Floor.Create (0 if no slope).</summary>
-        public double SlopeAngle { get; set; }
+        /// <summary>Slope ratio (rise/run = tangent of the slope angle). 0 if no slope.</summary>
+        public double SlopeRatio { get; set; }
 
         /// <summary>True if the floor has shape-edited vertices.</summary>
         public bool HasShapeEditing { get; set; }
@@ -115,15 +115,41 @@ namespace BimTasksV2.Helpers.FloorSplitter
                     tx1.Commit();
                 }
 
-                // === Transaction 2: Recreate Openings on flat replacement floors ===
+                // === Transaction 2: Apply slope on flat floors (before openings) ===
+                if (hasSlope)
+                {
+                    // Regenerate to ensure floor geometry is ready for shape editing
+                    doc.Regenerate();
+
+                    using (var txSlope = new Transaction(doc, "Apply Floor Slope"))
+                    {
+                        var failOpts = txSlope.GetFailureHandlingOptions();
+                        failOpts.SetFailuresPreprocessor(new SuppressWarningsPreprocessor());
+                        txSlope.SetFailureHandlingOptions(failOpts);
+                        txSlope.Start();
+
+                        foreach (var replacement in replacements)
+                        {
+                            if (slopeData.SlopeArrow != null)
+                                ApplySlopeViaShapeEditing(replacement.Floor, slopeData.SlopeArrow, slopeData.SlopeRatio);
+
+                            if (slopeData.HasShapeEditing && slopeData.VertexOffsets.Count > 0)
+                                ApplyShapeEditing(replacement.Floor, slopeData.VertexOffsets);
+                        }
+
+                        txSlope.Commit();
+                    }
+                }
+
+                // === Transaction 3: Recreate Openings on shape-edited (sloped) floors ===
                 if (openingBoundaries.Count > 0)
                 {
-                    using (var tx2 = new Transaction(doc, "Recreate Floor Openings"))
+                    using (var tx3 = new Transaction(doc, "Recreate Floor Openings"))
                     {
-                        var failOpts = tx2.GetFailureHandlingOptions();
+                        var failOpts = tx3.GetFailureHandlingOptions();
                         failOpts.SetFailuresPreprocessor(new SuppressWarningsPreprocessor());
-                        tx2.SetFailureHandlingOptions(failOpts);
-                        tx2.Start();
+                        tx3.SetFailureHandlingOptions(failOpts);
+                        tx3.Start();
 
                         int openingsCreated = 0;
                         foreach (var replacement in replacements)
@@ -146,30 +172,7 @@ namespace BimTasksV2.Helpers.FloorSplitter
                         Log.Information("[FloorSplitterEngine] Recreated {Count} openings across {Floors} replacement floors",
                             openingsCreated, replacements.Count);
 
-                        tx2.Commit();
-                    }
-                }
-
-                // === Transaction 3: Apply slope AFTER openings are in place ===
-                if (hasSlope)
-                {
-                    using (var txSlope = new Transaction(doc, "Apply Floor Slope"))
-                    {
-                        var failOpts = txSlope.GetFailureHandlingOptions();
-                        failOpts.SetFailuresPreprocessor(new SuppressWarningsPreprocessor());
-                        txSlope.SetFailureHandlingOptions(failOpts);
-                        txSlope.Start();
-
-                        foreach (var replacement in replacements)
-                        {
-                            if (slopeData.SlopeArrow != null)
-                                ApplySlopeViaShapeEditing(replacement.Floor, slopeData.SlopeArrow, slopeData.SlopeAngle);
-
-                            if (slopeData.HasShapeEditing && slopeData.VertexOffsets.Count > 0)
-                                ApplyShapeEditing(replacement.Floor, slopeData.VertexOffsets);
-                        }
-
-                        txSlope.Commit();
+                        tx3.Commit();
                     }
                 }
 
@@ -214,7 +217,7 @@ namespace BimTasksV2.Helpers.FloorSplitter
 
                 int openingCount = openingBoundaries.Count;
                 string openingMsg = openingCount > 0 ? $" {openingCount} opening(s) transferred." : "";
-                string slopeMsg = slopeData.SlopeArrow != null ? " Slope preserved." :
+                string slopeMsg = slopeData.SlopeArrow != null ? $" Slope preserved (ratio {slopeData.SlopeRatio:F4})." :
                     slopeData.HasShapeEditing ? " Shape editing preserved." : "";
                 var result = new FloorSplitResult
                 {
@@ -265,25 +268,16 @@ namespace BimTasksV2.Helpers.FloorSplitter
                     {
                         data.SlopeArrow = arrowLine;
 
-                        // Get the slope angle from the element
-                        var slopeParam = elem.get_Parameter(BuiltInParameter.ROOF_SLOPE);
-                        if (slopeParam != null)
-                        {
-                            data.SlopeAngle = slopeParam.AsDouble();
-                        }
-                        else
-                        {
-                            // Compute slope from start/end heights
-                            double startH = startHeightParam.AsDouble();
-                            var endHeightParam = elem.get_Parameter(BuiltInParameter.SLOPE_END_HEIGHT);
-                            double endH = endHeightParam?.AsDouble() ?? startH;
-                            double length = arrowLine.Length;
-                            if (length > 1e-9)
-                                data.SlopeAngle = Math.Atan((endH - startH) / length);
-                        }
+                        // Compute slope ratio (rise/run) from start/end heights
+                        double startH = startHeightParam.AsDouble();
+                        var endHeightParam = elem.get_Parameter(BuiltInParameter.SLOPE_END_HEIGHT);
+                        double endH = endHeightParam?.AsDouble() ?? startH;
+                        double length = arrowLine.Length;
+                        if (length > 1e-9)
+                            data.SlopeRatio = (endH - startH) / length;
 
-                        Log.Information("[FloorSplitterEngine] Found slope arrow: angle={Angle:F4} rad on floor {FloorId}",
-                            data.SlopeAngle, floor.Id);
+                        Log.Information("[FloorSplitterEngine] Found slope arrow: ratio={Ratio:F6} (rise/run), startH={StartH:F4}, endH={EndH:F4}, len={Len:F4} on floor {FloorId}",
+                            data.SlopeRatio, startH, endH, length, floor.Id);
                         break;
                     }
                 }
@@ -321,12 +315,16 @@ namespace BimTasksV2.Helpers.FloorSplitter
         /// Converts a slope arrow into SlabShapeEditor vertex offsets.
         /// Projects each vertex onto the arrow direction to compute its Z offset.
         /// </summary>
-        private static void ApplySlopeViaShapeEditing(Floor newFloor, Line slopeArrow, double slopeAngle)
+        private static void ApplySlopeViaShapeEditing(Floor newFloor, Line slopeArrow, double slopeRatio)
         {
             try
             {
                 var editor = newFloor.GetSlabShapeEditor();
-                if (editor == null) return;
+                if (editor == null)
+                {
+                    Log.Warning("[FloorSplitterEngine] SlabShapeEditor is null for floor {FloorId}", newFloor.Id);
+                    return;
+                }
 
                 editor.Enable();
 
@@ -339,8 +337,10 @@ namespace BimTasksV2.Helpers.FloorSplitter
 
                 XYZ arrowDirNorm = arrowDir2D.Normalize();
 
+                int vertexCount = 0;
                 foreach (SlabShapeVertex vertex in editor.SlabShapeVertices)
                 {
+                    vertexCount++;
                     // Vector from arrow start to vertex (XY only)
                     XYZ toVertex = new XYZ(
                         vertex.Position.X - arrowStart.X,
@@ -349,14 +349,15 @@ namespace BimTasksV2.Helpers.FloorSplitter
                     // Project onto arrow direction — distance along the slope
                     double projectedDist = toVertex.DotProduct(arrowDirNorm);
 
-                    // Offset = distance along arrow * tan(angle)
-                    double offset = projectedDist * Math.Tan(slopeAngle);
+                    // Offset = distance along arrow * slope ratio (rise/run)
+                    double offset = projectedDist * slopeRatio;
 
                     if (Math.Abs(offset) > 1e-9)
                         editor.ModifySubElement(vertex, offset);
                 }
 
-                Log.Information("[FloorSplitterEngine] Applied slope via shape editing on floor {FloorId}", newFloor.Id);
+                Log.Information("[FloorSplitterEngine] Applied slope via shape editing: {Count} vertices, ratio={Ratio:F6} on floor {FloorId}",
+                    vertexCount, slopeRatio, newFloor.Id);
             }
             catch (Exception ex)
             {
