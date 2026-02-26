@@ -92,6 +92,11 @@ namespace BimTasksV2.Ribbon
                 "btnJoinConcreteWallsFloors",
                 "Join Walls\n& Floors",
                 "BimTasksV2.Commands.Proxies.JoinAllConcreteWallsAndFloorsGeometryCommand"),
+
+            new ButtonDef(
+                "btnSplitFloor",
+                "Split\nFloor",
+                "BimTasksV2.Commands.Proxies.SplitFloorCommand"),
         };
 
         // =====================================================================

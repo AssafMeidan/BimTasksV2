@@ -53,6 +53,7 @@ namespace BimTasksV2.Ribbon
             // Structure (amber)
             ["btnSetBeamsToGround"]        = (StructBg, DrawBeamDown),
             ["btnJoinConcreteWallsFloors"] = (StructBg, DrawJoinGeom),
+            ["btnSplitFloor"]             = (StructBg, DrawSplitFloor),
             // Schedules (green)
             ["btnExportScheduleToExcel"]   = (SchedBg, DrawExportGrid),
             ["btnEditScheduleInExcel"]     = (SchedBg, DrawEditGrid),
@@ -213,6 +214,17 @@ namespace BimTasksV2.Ribbon
             dc.DrawRectangle(White, null, new Rect(8, 7, 4, 18));
             dc.DrawRectangle(White, null, new Rect(8, 21, 16, 4));
             dc.DrawEllipse(null, Thick, new Point(12, 21), 3, 3);
+        }
+
+        private static void DrawSplitFloor(DrawingContext dc)
+        {
+            // Floor splitting into layers: three horizontal rects stacked vertically
+            dc.DrawRectangle(White, null, new Rect(7, 8, 18, 3));
+            dc.DrawRectangle(White, null, new Rect(7, 14, 18, 3));
+            dc.DrawRectangle(White, null, new Rect(7, 20, 18, 3));
+            // Vertical arrows between layers
+            dc.DrawLine(Thin, new Point(16, 11), new Point(16, 14));
+            dc.DrawLine(Thin, new Point(16, 17), new Point(16, 20));
         }
 
         // =================================================================
