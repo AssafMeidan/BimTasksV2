@@ -188,6 +188,16 @@ namespace BimTasksV2.Ribbon
                 "btnToggleVosk",
                 "Voice\nControl",
                 "BimTasksV2.Commands.Proxies.ToggleVoskVoiceRecognitionCommand"),
+
+            new ButtonDef(
+                "btnPickAndCreateFloor",
+                "Floor From\nDWG Pick",
+                "BimTasksV2.Commands.Proxies.PickAndCreateFloorCommand"),
+
+            new ButtonDef(
+                "btnImportAllDwgFloors",
+                "Floors From\nDWG All",
+                "BimTasksV2.Commands.Proxies.ImportAllDwgFloorsCommand"),
         };
 
         /// <summary>

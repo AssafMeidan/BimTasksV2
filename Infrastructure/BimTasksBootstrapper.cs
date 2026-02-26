@@ -113,7 +113,7 @@ namespace BimTasksV2.Infrastructure
             Log.Information("BimTasksBootstrapper.Initialize() completed successfully.");
         }
 
-        #endregion
+        #endregion Phase 1: Initialize (called from OnStartup)
 
         #region Phase 2: Register Dockable Pane (called during OnStartup)
 
@@ -140,7 +140,7 @@ namespace BimTasksV2.Infrastructure
             return paneId;
         }
 
-        #endregion
+        #endregion Phase 2: Register Dockable Pane (called during OnStartup)
 
         #region Phase 3: OnFirstIdle (called from Revit Idling event)
 
@@ -179,7 +179,7 @@ namespace BimTasksV2.Infrastructure
             Log.Information("BimTasksBootstrapper.OnFirstIdle() completed.");
         }
 
-        #endregion
+        #endregion Phase 3: OnFirstIdle (called from Revit Idling event)
 
         #region Phase 4: Shutdown
 
@@ -204,7 +204,7 @@ namespace BimTasksV2.Infrastructure
             Log.CloseAndFlush();
         }
 
-        #endregion
+        #endregion Phase 4: Shutdown
 
         #region Registration Helpers
 
@@ -260,6 +260,6 @@ namespace BimTasksV2.Infrastructure
             registry.RegisterForNavigation<Views.CopyCategoryFromLinkView>();
         }
 
-        #endregion
+        #endregion Registration Helpers
     }
 }
