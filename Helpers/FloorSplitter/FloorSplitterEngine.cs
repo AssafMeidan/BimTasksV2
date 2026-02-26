@@ -18,6 +18,27 @@ namespace BimTasksV2.Helpers.FloorSplitter
     }
 
     /// <summary>
+    /// Holds slope data extracted from the original floor.
+    /// </summary>
+    public class FloorSlopeData
+    {
+        /// <summary>Slope arrow line for Floor.Create (null if no slope arrow).</summary>
+        public Line? SlopeArrow { get; set; }
+
+        /// <summary>Slope angle in radians for Floor.Create (0 if no slope).</summary>
+        public double SlopeAngle { get; set; }
+
+        /// <summary>True if the floor has shape-edited vertices.</summary>
+        public bool HasShapeEditing { get; set; }
+
+        /// <summary>
+        /// Shape-edited vertex positions with their Z offsets from the base plane.
+        /// Key = (X, Y) position, Value = Z offset.
+        /// </summary>
+        public List<(XYZ Position, double Offset)> VertexOffsets { get; set; } = new();
+    }
+
+    /// <summary>
     /// Orchestrates the floor split pipeline: creates replacement single-layer floors
     /// at the correct vertical offsets, joins adjacent layers, and deletes the original.
     /// </summary>
@@ -45,6 +66,9 @@ namespace BimTasksV2.Helpers.FloorSplitter
             // Record openings hosted on this floor BEFORE any modifications
             var openingBoundaries = RecordOpenings(doc, floor);
 
+            // Record slope data (slope arrow or shape editing)
+            var slopeData = RecordSlope(doc, floor);
+
             var replacements = new List<(Floor Floor, FloorLayerInfo Layer)>();
 
             using var txGroup = new TransactionGroup(doc, "Split Compound Floor");
@@ -66,8 +90,9 @@ namespace BimTasksV2.Helpers.FloorSplitter
                         if (layer.ResolvedType == null)
                             FloorTypeResolver.FindOrCreateType(doc, layer);
 
-                        // Create the replacement floor with same boundary
-                        var newFloor = Floor.Create(doc, curveLoops, layer.ResolvedType!.Id, levelId, true, null, 0);
+                        // Create the replacement floor with same boundary and slope
+                        var newFloor = Floor.Create(doc, curveLoops, layer.ResolvedType!.Id, levelId,
+                            true, slopeData.SlopeArrow, slopeData.SlopeAngle);
                         if (newFloor == null)
                         {
                             Log.Warning("[FloorSplitterEngine] Failed to create floor for layer {Index}", layer.Index);
@@ -86,6 +111,25 @@ namespace BimTasksV2.Helpers.FloorSplitter
                     }
 
                     tx1.Commit();
+                }
+
+                // === Transaction 1.5: Apply Shape Editing (if original had modified vertices) ===
+                if (slopeData.HasShapeEditing && slopeData.VertexOffsets.Count > 0)
+                {
+                    using (var txShape = new Transaction(doc, "Apply Shape Editing"))
+                    {
+                        var failOpts = txShape.GetFailureHandlingOptions();
+                        failOpts.SetFailuresPreprocessor(new SuppressWarningsPreprocessor());
+                        txShape.SetFailureHandlingOptions(failOpts);
+                        txShape.Start();
+
+                        foreach (var replacement in replacements)
+                        {
+                            ApplyShapeEditing(replacement.Floor, slopeData.VertexOffsets);
+                        }
+
+                        txShape.Commit();
+                    }
                 }
 
                 // === Transaction 2: Recreate Openings on Replacement Floors ===
@@ -164,10 +208,12 @@ namespace BimTasksV2.Helpers.FloorSplitter
 
                 int openingCount = openingBoundaries.Count;
                 string openingMsg = openingCount > 0 ? $" {openingCount} opening(s) transferred." : "";
+                string slopeMsg = slopeData.SlopeArrow != null ? " Slope preserved." :
+                    slopeData.HasShapeEditing ? " Shape editing preserved." : "";
                 var result = new FloorSplitResult
                 {
                     Success = true,
-                    Message = $"Split into {replacements.Count} floors.{openingMsg}",
+                    Message = $"Split into {replacements.Count} floors.{openingMsg}{slopeMsg}",
                     ReplacementFloors = replacements.Select(r => r.Floor).ToList(),
                     ReplacementPairs = replacements
                 };
@@ -184,6 +230,121 @@ namespace BimTasksV2.Helpers.FloorSplitter
                     Success = false,
                     Message = $"Split failed: {ex.Message}"
                 };
+            }
+        }
+
+        /// <summary>
+        /// Records slope data from the original floor: slope arrow and/or shape editing.
+        /// Must be called BEFORE any transactions modify the floor.
+        /// </summary>
+        private static FloorSlopeData RecordSlope(Document doc, Floor floor)
+        {
+            var data = new FloorSlopeData();
+
+            try
+            {
+                // === Method 1: Find slope arrow via dependent elements ===
+                var dependentIds = floor.GetDependentElements(null);
+                foreach (var id in dependentIds)
+                {
+                    var elem = doc.GetElement(id);
+                    if (elem == null) continue;
+
+                    // Slope arrows have SLOPE_START_HEIGHT parameter
+                    var startHeightParam = elem.get_Parameter(BuiltInParameter.SLOPE_START_HEIGHT);
+                    if (startHeightParam == null) continue;
+
+                    // Found a slope arrow element — get its geometry
+                    if (elem.Location is LocationCurve locCurve && locCurve.Curve is Line arrowLine)
+                    {
+                        data.SlopeArrow = arrowLine;
+
+                        // Get the slope angle from the element
+                        var slopeParam = elem.get_Parameter(BuiltInParameter.ROOF_SLOPE);
+                        if (slopeParam != null)
+                        {
+                            data.SlopeAngle = slopeParam.AsDouble();
+                        }
+                        else
+                        {
+                            // Compute slope from start/end heights
+                            double startH = startHeightParam.AsDouble();
+                            var endHeightParam = elem.get_Parameter(BuiltInParameter.SLOPE_END_HEIGHT);
+                            double endH = endHeightParam?.AsDouble() ?? startH;
+                            double length = arrowLine.Length;
+                            if (length > 1e-9)
+                                data.SlopeAngle = Math.Atan((endH - startH) / length);
+                        }
+
+                        Log.Information("[FloorSplitterEngine] Found slope arrow: angle={Angle:F4} rad on floor {FloorId}",
+                            data.SlopeAngle, floor.Id);
+                        break;
+                    }
+                }
+
+                // === Method 2: Check SlabShapeEditor for shape-edited vertices ===
+                var editor = floor.GetSlabShapeEditor();
+                if (editor != null && editor.IsEnabled)
+                {
+                    data.HasShapeEditing = true;
+
+                    // Compute base plane Z (where vertices would be if floor were flat)
+                    var level = doc.GetElement(floor.LevelId) as Level;
+                    double heightOff = floor.get_Parameter(BuiltInParameter.FLOOR_HEIGHTABOVELEVEL_PARAM)?.AsDouble() ?? 0.0;
+                    double basePlaneZ = (level?.Elevation ?? 0) + heightOff;
+
+                    foreach (SlabShapeVertex vertex in editor.SlabShapeVertices)
+                    {
+                        double offset = vertex.Position.Z - basePlaneZ;
+                        data.VertexOffsets.Add((vertex.Position, offset));
+                    }
+
+                    Log.Information("[FloorSplitterEngine] Found {Count} shape-edited vertices on floor {FloorId}",
+                        data.VertexOffsets.Count, floor.Id);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "[FloorSplitterEngine] Failed to extract slope data from floor {FloorId}", floor.Id);
+            }
+
+            return data;
+        }
+
+        /// <summary>
+        /// Applies shape editing (vertex offsets) to a replacement floor,
+        /// matching vertices by XY proximity to the original floor's vertices.
+        /// </summary>
+        private static void ApplyShapeEditing(Floor newFloor, List<(XYZ Position, double Offset)> originalOffsets)
+        {
+            const double xyTolerance = 0.01; // ~3mm tolerance for vertex matching
+
+            try
+            {
+                var editor = newFloor.GetSlabShapeEditor();
+                if (editor == null) return;
+
+                editor.Enable();
+
+                foreach (SlabShapeVertex newVertex in editor.SlabShapeVertices)
+                {
+                    // Find the matching original vertex by XY position
+                    foreach (var (origPos, origOffset) in originalOffsets)
+                    {
+                        double dx = Math.Abs(newVertex.Position.X - origPos.X);
+                        double dy = Math.Abs(newVertex.Position.Y - origPos.Y);
+
+                        if (dx < xyTolerance && dy < xyTolerance && Math.Abs(origOffset) > 1e-9)
+                        {
+                            editor.ModifySubElement(newVertex, origOffset);
+                            break;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "[FloorSplitterEngine] Failed to apply shape editing to floor {FloorId}", newFloor.Id);
             }
         }
 
