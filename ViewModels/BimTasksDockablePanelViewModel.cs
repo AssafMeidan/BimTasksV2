@@ -61,6 +61,11 @@ namespace BimTasksV2.ViewModels
                         CurrentView = container.Resolve<Views.ElementCalculationView>();
                         break;
 
+                    case "FixSplitCorners":
+                        PanelTitle = "Fix Split Corners";
+                        CurrentView = container.Resolve<Views.FixSplitCornersView>();
+                        break;
+
                     default:
                         // Try to resolve by full type name within the Views namespace
                         var viewType = Type.GetType($"BimTasksV2.Views.{viewKey}View");

@@ -7,7 +7,7 @@ namespace BimTasksV2.Helpers.WallSplitter
     /// <summary>
     /// Records the join state of an original wall before splitting,
     /// then replicates adjacent-layer joins onto the replacement walls.
-    /// Cross-wall corner connections are handled by FixSplitCorners command.
+    /// Cross-wall corner connections are handled by the Fix Corners panel.
     /// </summary>
     public class JoinRecord
     {

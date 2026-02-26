@@ -4,9 +4,12 @@ using System.Linq;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using BimTasksV2.Commands.Infrastructure;
+using BimTasksV2.Events;
 using BimTasksV2.Helpers;
 using BimTasksV2.Helpers.WallSplitter;
 using BimTasksV2.Views;
+using Prism.Events;
+using Prism.Ioc;
 using Serilog;
 
 namespace BimTasksV2.Commands.Handlers
@@ -179,7 +182,7 @@ namespace BimTasksV2.Commands.Handlers
                     }
                 }
 
-                // Save corner fix data for the Fix Split Corners command
+                // Save corner fix data and show Fix Corners panel
                 var successfulResults = allResults.Where(r => r.Success).ToList();
                 if (successfulResults.Count > 0)
                 {
@@ -193,13 +196,44 @@ namespace BimTasksV2.Commands.Handlers
                     {
                         Log.Warning(ex, "[SplitWallHandler] Failed to save corner fix data");
                     }
+
+                    // Switch dockable panel to FixSplitCornersView
+                    try
+                    {
+                        var container = BimTasksV2.Infrastructure.ContainerLocator.Container;
+                        var contextService = container.Resolve<Services.IRevitContextService>();
+                        contextService.UIApplication = uiApp;
+                        contextService.UIDocument = uidoc;
+
+                        var eventAggregator = BimTasksV2.Infrastructure.ContainerLocator.EventAggregator;
+
+                        eventAggregator.GetEvent<BimTasksEvents.SwitchDockablePanelEvent>()
+                            .Publish("FixSplitCorners");
+
+                        int totalReplacements = successfulResults.Sum(r => r.ReplacementWalls.Count);
+                        eventAggregator.GetEvent<BimTasksEvents.FixSplitCornersReadyEvent>()
+                            .Publish(new FixSplitCornersPayload
+                            {
+                                WallsSplit = succeeded,
+                                TotalReplacements = totalReplacements
+                            });
+
+                        var pane = uiApp.GetDockablePane(
+                            BimTasksV2.Infrastructure.BimTasksBootstrapper.DockablePaneId);
+                        if (pane != null && !pane.IsShown())
+                            pane.Show();
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning(ex, "[SplitWallHandler] Failed to show Fix Corners panel");
+                    }
                 }
 
                 // Show summary
                 string summary = $"Split complete: {succeeded} succeeded, {failed} failed out of {wallsToSplit.Count} wall(s).";
                 if (successfulResults.Count > 0)
                 {
-                    summary += "\n\nClick 'Fix Split Corners' to trim/extend walls at corner intersections.";
+                    summary += "\n\nDismiss any join errors, then click 'Fix Corners' in the BimTasks panel.";
                 }
                 if (messages.Count > 0)
                 {

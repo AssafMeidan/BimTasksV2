@@ -33,9 +33,12 @@ namespace BimTasksV2.Infrastructure
         private VoskVoiceCommandService? _voiceService;
 
         /// <summary>
-        /// DockablePaneId GUID for the BimTasks dockable panel.
+        /// DockablePaneId for the BimTasks dockable panel.
+        /// Public so handlers in the isolated ALC can reference it directly
+        /// (they cannot use BimTasksApp.DockablePaneId which lives in the default ALC).
         /// </summary>
-        private static readonly Guid DockablePaneGuid = new("B2C3D4E5-F6A7-8901-BCDE-FA2345678902");
+        public static readonly DockablePaneId DockablePaneId =
+            new(new Guid("B2C3D4E5-F6A7-8901-BCDE-FA2345678902"));
 
         #region Phase 1: Initialize (called from OnStartup)
 
@@ -124,20 +127,18 @@ namespace BimTasksV2.Infrastructure
         /// </summary>
         public DockablePaneId RegisterDockablePane(UIControlledApplication app)
         {
-            var paneId = new DockablePaneId(DockablePaneGuid);
-
             try
             {
                 var panel = new Views.BimTasksDockablePanel();
-                app.RegisterDockablePane(paneId, "BimTasks", panel);
-                Log.Information("Dockable pane registered: {PaneId}", DockablePaneGuid);
+                app.RegisterDockablePane(DockablePaneId, "BimTasks", panel);
+                Log.Information("Dockable pane registered: {PaneId}", DockablePaneId.Guid);
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "Failed to register dockable pane");
             }
 
-            return paneId;
+            return DockablePaneId;
         }
 
         #endregion Phase 2: Register Dockable Pane (called during OnStartup)
@@ -258,6 +259,7 @@ namespace BimTasksV2.Infrastructure
             registry.RegisterForNavigation<Views.ElementCalculationView>();
             registry.RegisterForNavigation<Views.UniformatWindowView>();
             registry.RegisterForNavigation<Views.CopyCategoryFromLinkView>();
+            registry.RegisterForNavigation<Views.FixSplitCornersView>();
         }
 
         #endregion Registration Helpers

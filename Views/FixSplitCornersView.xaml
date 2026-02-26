@@ -1,0 +1,83 @@
+<UserControl x:Class="BimTasksV2.Views.FixSplitCornersView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:prism="http://prismlibrary.com/"
+             prism:ViewModelLocator.AutoWireViewModel="True"
+             Background="#F5F5F5">
+
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="PrimaryBrush" Color="#1976D2"/>
+        <SolidColorBrush x:Key="CardBackgroundBrush" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#E0E0E0"/>
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#212121"/>
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="#757575"/>
+        <SolidColorBrush x:Key="SuccessBrush" Color="#4CAF50"/>
+    </UserControl.Resources>
+
+    <Grid Margin="16">
+        <StackPanel VerticalAlignment="Top">
+
+            <!-- Status Card -->
+            <Border Background="{StaticResource CardBackgroundBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,0,0,12">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.15" Direction="270"/>
+                </Border.Effect>
+                <StackPanel>
+                    <TextBlock Text="Wall Splitter" FontSize="16" FontWeight="SemiBold"
+                               Foreground="{StaticResource PrimaryBrush}" Margin="0,0,0,8"/>
+                    <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap"
+                               FontSize="13" Foreground="{StaticResource TextPrimaryBrush}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Fix Corners Button -->
+            <Button Command="{Binding FixCornersCommand}"
+                    IsEnabled="{Binding CanFixCorners}"
+                    Height="40" Margin="0,0,0,12"
+                    FontSize="14" FontWeight="SemiBold" Cursor="Hand">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Setter Property="Background" Value="{StaticResource PrimaryBrush}"/>
+                        <Setter Property="Foreground" Value="White"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}"
+                                            CornerRadius="6" Padding="16,0">
+                                        <ContentPresenter HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsEnabled" Value="False">
+                                            <Setter Property="Background" Value="#BDBDBD"/>
+                                        </Trigger>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#1565C0"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Button.Style>
+                <TextBlock Text="{Binding ButtonText}" Foreground="White" FontSize="14" FontWeight="SemiBold"/>
+            </Button>
+
+            <!-- Result Card (shown after fix) -->
+            <Border Background="{StaticResource CardBackgroundBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16"
+                    Visibility="{Binding ResultVisibility}">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.15" Direction="270"/>
+                </Border.Effect>
+                <TextBlock Text="{Binding ResultText}" TextWrapping="Wrap"
+                           FontSize="13" Foreground="{StaticResource SuccessBrush}"/>
+            </Border>
+
+        </StackPanel>
+    </Grid>
+</UserControl>

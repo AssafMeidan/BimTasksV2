@@ -46,7 +46,6 @@ namespace BimTasksV2.Ribbon
             ["btnAdjustWallHeight"]     = (WallBg, DrawWallFloor),
             ["btnChangeWallHeight"]     = (WallBg, DrawWallHeight),
             ["btnSplitWall"]            = (WallBg, DrawSplitWall),
-            ["btnFixSplitCorners"]     = (WallBg, DrawFixCorners),
             ["btnAddChipuyToWall"]      = (WallBg, DrawCladding),
             ["btnAddChipuyExternal"]    = (WallBg, dc => { DrawCladding(dc); Label(dc, "E", 22); }),
             ["btnAddChipuyInternal"]    = (WallBg, dc => { DrawCladding(dc); Label(dc, "I", 23); }),
@@ -187,16 +186,6 @@ namespace BimTasksV2.Ribbon
             // Horizontal arrows between layers
             dc.DrawLine(Thin, new Point(11, 16), new Point(14, 16));
             dc.DrawLine(Thin, new Point(17, 16), new Point(20, 16));
-        }
-
-        private static void DrawFixCorners(DrawingContext dc)
-        {
-            // L-corner with check mark: two perpendicular walls meeting
-            dc.DrawRectangle(White, null, new Rect(7, 7, 3, 14));
-            dc.DrawRectangle(White, null, new Rect(7, 21, 18, 3));
-            // Check mark (fix/done)
-            dc.DrawLine(Thick, new Point(19, 11), new Point(22, 15));
-            dc.DrawLine(Thick, new Point(22, 15), new Point(27, 8));
         }
 
         private static void DrawWindow(DrawingContext dc)
