@@ -42,6 +42,9 @@ namespace BimTasksV2.Helpers.FloorSplitter
             if (curveLoops == null || curveLoops.Count == 0)
                 return new FloorSplitResult { Success = false, Message = "Could not extract floor boundary." };
 
+            // Record openings hosted on this floor BEFORE any modifications
+            var openingBoundaries = RecordOpenings(doc, floor);
+
             var replacements = new List<(Floor Floor, FloorLayerInfo Layer)>();
 
             using var txGroup = new TransactionGroup(doc, "Split Compound Floor");
@@ -85,26 +88,61 @@ namespace BimTasksV2.Helpers.FloorSplitter
                     tx1.Commit();
                 }
 
-                // === Transaction 2: Delete Original Floor ===
-                using (var tx2 = new Transaction(doc, "Delete Original Floor"))
+                // === Transaction 2: Recreate Openings on Replacement Floors ===
+                if (openingBoundaries.Count > 0)
                 {
-                    var failOpts = tx2.GetFailureHandlingOptions();
-                    failOpts.SetFailuresPreprocessor(new SuppressWarningsPreprocessor());
-                    tx2.SetFailureHandlingOptions(failOpts);
-                    tx2.Start();
+                    using (var tx2 = new Transaction(doc, "Recreate Floor Openings"))
+                    {
+                        var failOpts = tx2.GetFailureHandlingOptions();
+                        failOpts.SetFailuresPreprocessor(new SuppressWarningsPreprocessor());
+                        tx2.SetFailureHandlingOptions(failOpts);
+                        tx2.Start();
 
-                    doc.Delete(floor.Id);
+                        int openingsCreated = 0;
+                        foreach (var replacement in replacements)
+                        {
+                            foreach (var boundary in openingBoundaries)
+                            {
+                                try
+                                {
+                                    doc.Create.NewOpening(replacement.Floor, boundary, false);
+                                    openingsCreated++;
+                                }
+                                catch (Exception ex)
+                                {
+                                    Log.Warning(ex, "[FloorSplitterEngine] Failed to create opening on floor {FloorId}",
+                                        replacement.Floor.Id);
+                                }
+                            }
+                        }
 
-                    tx2.Commit();
+                        Log.Information("[FloorSplitterEngine] Recreated {Count} openings across {Floors} replacement floors",
+                            openingsCreated, replacements.Count);
+
+                        tx2.Commit();
+                    }
                 }
 
-                // === Transaction 3: Join Adjacent Layers ===
-                using (var tx3 = new Transaction(doc, "Join Adjacent Floor Layers"))
+                // === Transaction 3: Delete Original Floor ===
+                using (var tx3 = new Transaction(doc, "Delete Original Floor"))
                 {
                     var failOpts = tx3.GetFailureHandlingOptions();
                     failOpts.SetFailuresPreprocessor(new SuppressWarningsPreprocessor());
                     tx3.SetFailureHandlingOptions(failOpts);
                     tx3.Start();
+
+                    doc.Delete(floor.Id);
+
+                    tx3.Commit();
+                }
+
+                // === Transaction 4: Join Adjacent Layers ===
+                using (var tx4 = new Transaction(doc, "Join Adjacent Floor Layers"))
+                {
+                    var failOpts = tx4.GetFailureHandlingOptions();
+                    failOpts.SetFailuresPreprocessor(new SuppressWarningsPreprocessor());
+                    tx4.SetFailureHandlingOptions(failOpts);
+                    tx4.Start();
 
                     for (int i = 0; i < replacements.Count - 1; i++)
                     {
@@ -119,15 +157,17 @@ namespace BimTasksV2.Helpers.FloorSplitter
                         }
                     }
 
-                    tx3.Commit();
+                    tx4.Commit();
                 }
 
                 txGroup.Assimilate();
 
+                int openingCount = openingBoundaries.Count;
+                string openingMsg = openingCount > 0 ? $" {openingCount} opening(s) transferred." : "";
                 var result = new FloorSplitResult
                 {
                     Success = true,
-                    Message = $"Split into {replacements.Count} floors.",
+                    Message = $"Split into {replacements.Count} floors.{openingMsg}",
                     ReplacementFloors = replacements.Select(r => r.Floor).ToList(),
                     ReplacementPairs = replacements
                 };
@@ -145,6 +185,75 @@ namespace BimTasksV2.Helpers.FloorSplitter
                     Message = $"Split failed: {ex.Message}"
                 };
             }
+        }
+
+        /// <summary>
+        /// Records the boundary curves of all openings hosted on a floor.
+        /// Must be called BEFORE the original floor is deleted.
+        /// </summary>
+        private static List<CurveArray> RecordOpenings(Document doc, Floor floor)
+        {
+            var boundaries = new List<CurveArray>();
+
+            try
+            {
+                // Find all floor openings hosted on this floor
+                var openings = new FilteredElementCollector(doc)
+                    .OfCategory(BuiltInCategory.OST_FloorOpening)
+                    .OfClass(typeof(Opening))
+                    .Cast<Opening>()
+                    .Where(o => o.Host?.Id == floor.Id)
+                    .ToList();
+
+                foreach (var opening in openings)
+                {
+                    try
+                    {
+                        if (opening.IsRectBoundary)
+                        {
+                            // Rectangular opening — build CurveArray from BoundaryRect points
+                            var pts = opening.BoundaryRect;
+                            if (pts != null && pts.Count >= 2)
+                            {
+                                var min = pts[0];
+                                var max = pts[1];
+                                var curveArray = new CurveArray();
+                                curveArray.Append(Line.CreateBound(new XYZ(min.X, min.Y, min.Z), new XYZ(max.X, min.Y, min.Z)));
+                                curveArray.Append(Line.CreateBound(new XYZ(max.X, min.Y, min.Z), new XYZ(max.X, max.Y, min.Z)));
+                                curveArray.Append(Line.CreateBound(new XYZ(max.X, max.Y, min.Z), new XYZ(min.X, max.Y, min.Z)));
+                                curveArray.Append(Line.CreateBound(new XYZ(min.X, max.Y, min.Z), new XYZ(min.X, min.Y, min.Z)));
+                                boundaries.Add(curveArray);
+                            }
+                        }
+                        else
+                        {
+                            // Sketch-based opening — copy boundary curves
+                            var boundaryCurves = opening.BoundaryCurves;
+                            if (boundaryCurves != null && boundaryCurves.Size > 0)
+                            {
+                                var curveArray = new CurveArray();
+                                foreach (Curve curve in boundaryCurves)
+                                    curveArray.Append(curve);
+                                boundaries.Add(curveArray);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning(ex, "[FloorSplitterEngine] Failed to record opening {OpeningId}", opening.Id);
+                    }
+                }
+
+                if (boundaries.Count > 0)
+                    Log.Information("[FloorSplitterEngine] Recorded {Count} opening(s) from floor {FloorId}",
+                        boundaries.Count, floor.Id);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "[FloorSplitterEngine] Failed to query openings for floor {FloorId}", floor.Id);
+            }
+
+            return boundaries;
         }
 
         /// <summary>
