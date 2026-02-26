@@ -246,33 +246,28 @@ namespace BimTasksV2.Helpers.WallSplitter
                 }
             }
 
-            // Cross-join pass: connect replacement walls from different original walls
-            // at corners and intersections (needed because original neighbor IDs become
-            // invalid after the neighbor is also split).
-            // Uses prioritized joining: same WallType first, then same layer position,
-            // then remaining pairs.
-            var allPairs = results
-                .Where(r => r.Success)
-                .SelectMany(r => r.ReplacementPairs)
-                .ToList();
+            // Cross-connect pass: trim/extend replacement walls from different
+            // original walls to meet at corners. Matches by WallType first,
+            // then by layer position (outer↔outer, inner↔inner).
+            var successfulResults = results.Where(r => r.Success).ToList();
 
-            if (allPairs.Count > 1)
+            if (successfulResults.Count > 1)
             {
                 try
                 {
-                    using var txCrossJoin = new Transaction(doc, "Cross-Join Split Walls");
+                    using var txCrossJoin = new Transaction(doc, "Connect Split Wall Corners");
                     var failOpts = txCrossJoin.GetFailureHandlingOptions();
                     failOpts.SetFailuresPreprocessor(new SuppressWarningsPreprocessor());
                     txCrossJoin.SetFailureHandlingOptions(failOpts);
                     txCrossJoin.Start();
 
-                    WallJoinReplicator.CrossJoinReplacements(doc, allPairs);
+                    WallJoinReplicator.CrossJoinReplacements(doc, successfulResults);
 
                     txCrossJoin.Commit();
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning(ex, "[WallSplitterEngine] Cross-join pass failed (non-critical)");
+                    Log.Warning(ex, "[WallSplitterEngine] Corner connection pass failed (non-critical)");
                 }
             }
 

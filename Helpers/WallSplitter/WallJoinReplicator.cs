@@ -1,6 +1,8 @@
 using Autodesk.Revit.DB;
 using Serilog;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace BimTasksV2.Helpers.WallSplitter
 {
@@ -123,97 +125,162 @@ namespace BimTasksV2.Helpers.WallSplitter
         }
 
         /// <summary>
-        /// Joins replacement walls from different original walls using prioritized order:
-        /// 1. Same WallType — materials merge cleanly at corners
-        /// 2. Same layer position (outer↔outer, inner↔inner) — architecturally logical
-        /// 3. Remaining pairs — last resort for any missed overlaps
+        /// Connects replacement walls from different original walls at corners
+        /// using curve extension/trimming (same approach as CladdingWallJoinHelper).
+        /// Matches walls by WallType first, then by layer position, so exterior
+        /// connects to exterior and core connects to core.
         /// </summary>
         /// <param name="doc">The Revit document.</param>
-        /// <param name="allPairs">All replacement walls with their layer info from all split operations.</param>
-        public static void CrossJoinReplacements(Document doc, List<(Wall Wall, LayerInfo Layer)> allPairs)
+        /// <param name="splitResults">Successful split results, each containing replacement pairs from one original wall.</param>
+        public static void CrossJoinReplacements(Document doc, List<SplitResult> splitResults)
         {
-            if (allPairs == null || allPairs.Count < 2)
+            if (splitResults == null || splitResults.Count < 2)
                 return;
 
-            var joined = new HashSet<(ElementId, ElementId)>();
+            var connected = new HashSet<(long, long)>();
 
-            // Pass 1: Same WallType — these merge cleanly (same material/thickness)
-            for (int i = 0; i < allPairs.Count; i++)
+            // For each pair of original walls (different split results)
+            for (int a = 0; a < splitResults.Count; a++)
             {
-                for (int j = i + 1; j < allPairs.Count; j++)
+                for (int b = a + 1; b < splitResults.Count; b++)
                 {
-                    if (allPairs[i].Wall.WallType.Id == allPairs[j].Wall.WallType.Id)
+                    var pairsA = splitResults[a].ReplacementPairs;
+                    var pairsB = splitResults[b].ReplacementPairs;
+
+                    // Pass 1: Match by same WallType
+                    foreach (var pa in pairsA)
                     {
-                        if (TryJoin(doc, allPairs[i].Wall, allPairs[j].Wall))
-                            joined.Add(OrderIds(allPairs[i].Wall.Id, allPairs[j].Wall.Id));
+                        foreach (var pb in pairsB)
+                        {
+                            var key = OrderIds(pa.Wall.Id, pb.Wall.Id);
+                            if (connected.Contains(key)) continue;
+
+                            if (pa.Wall.WallType.Id == pb.Wall.WallType.Id)
+                            {
+                                if (TrimWallsToCorner(doc, pa.Wall, pb.Wall))
+                                    connected.Add(key);
+                            }
+                        }
+                    }
+
+                    // Pass 2: Match by same layer index (outer↔outer, inner↔inner)
+                    foreach (var pa in pairsA)
+                    {
+                        foreach (var pb in pairsB)
+                        {
+                            var key = OrderIds(pa.Wall.Id, pb.Wall.Id);
+                            if (connected.Contains(key)) continue;
+
+                            if (pa.Layer.Index == pb.Layer.Index)
+                            {
+                                if (TrimWallsToCorner(doc, pa.Wall, pb.Wall))
+                                    connected.Add(key);
+                            }
+                        }
                     }
                 }
             }
 
-            // Pass 2: Same layer position (index) — outer↔outer, inner↔inner
-            for (int i = 0; i < allPairs.Count; i++)
+            // Allow end joins on all replacement walls to form clean corners
+            foreach (var result in splitResults)
             {
-                for (int j = i + 1; j < allPairs.Count; j++)
+                foreach (var pair in result.ReplacementPairs)
                 {
-                    var key = OrderIds(allPairs[i].Wall.Id, allPairs[j].Wall.Id);
-                    if (joined.Contains(key))
-                        continue;
-
-                    if (allPairs[i].Layer.Index == allPairs[j].Layer.Index)
-                    {
-                        if (TryJoin(doc, allPairs[i].Wall, allPairs[j].Wall))
-                            joined.Add(key);
-                    }
+                    ForceEndJoinRecalculation(pair.Wall, 0);
+                    ForceEndJoinRecalculation(pair.Wall, 1);
                 }
-            }
-
-            // Pass 3: Remaining pairs — catch any overlapping geometry we missed
-            for (int i = 0; i < allPairs.Count; i++)
-            {
-                for (int j = i + 1; j < allPairs.Count; j++)
-                {
-                    var key = OrderIds(allPairs[i].Wall.Id, allPairs[j].Wall.Id);
-                    if (joined.Contains(key))
-                        continue;
-
-                    TryJoin(doc, allPairs[i].Wall, allPairs[j].Wall);
-                }
-            }
-
-            // Toggle end joins on all walls to force Revit corner cleanup
-            foreach (var pair in allPairs)
-            {
-                ForceEndJoinRecalculation(pair.Wall, 0);
-                ForceEndJoinRecalculation(pair.Wall, 1);
             }
         }
 
+        // Tolerance for extending curves to detect near-intersections (in feet)
+        private const double ExtendTolerance = 1.0 / 30.48 * 10.0; // ~10 cm
+
         /// <summary>
-        /// Attempts to geometry-join two walls. Returns true if successful.
+        /// Extends both wall curves slightly, checks for intersection, and trims
+        /// both to the intersection point so they meet at the corner.
+        /// Returns true if walls were trimmed.
         /// </summary>
-        private static bool TryJoin(Document doc, Wall a, Wall b)
+        private static bool TrimWallsToCorner(Document doc, Wall wall1, Wall wall2)
         {
             try
             {
-                if (!JoinGeometryUtils.AreElementsJoined(doc, a, b))
+                var loc1 = wall1.Location as LocationCurve;
+                var loc2 = wall2.Location as LocationCurve;
+                if (loc1 == null || loc2 == null) return false;
+
+                Curve ext1 = ExtendLine(loc1.Curve, ExtendTolerance);
+                Curve ext2 = ExtendLine(loc2.Curve, ExtendTolerance);
+
+                IntersectionResultArray resultArray;
+                var result = ext1.Intersect(ext2, out resultArray);
+
+                if (result != SetComparisonResult.Overlap || resultArray == null || resultArray.Size == 0)
+                    return false;
+
+                XYZ intersectionPoint = resultArray.get_Item(0).XYZPoint;
+
+                // Trim both curves to the intersection point
+                Curve trimmed1 = TrimToIntersection(loc1.Curve, intersectionPoint);
+                Curve trimmed2 = TrimToIntersection(loc2.Curve, intersectionPoint);
+
+                if (trimmed1 != null && trimmed2 != null)
                 {
-                    JoinGeometryUtils.JoinGeometry(doc, a, b);
+                    loc1.Curve = trimmed1;
+                    loc2.Curve = trimmed2;
                     return true;
                 }
-                return true; // Already joined
             }
-            catch
+            catch (Exception ex)
             {
-                return false; // Non-overlapping or incompatible — expected
+                Log.Warning(ex, "WallJoinReplicator: Failed to trim walls {W1} and {W2} to corner",
+                    wall1.Id, wall2.Id);
             }
+
+            return false;
         }
 
         /// <summary>
-        /// Returns a canonical ordered pair of ElementIds for use as a HashSet key.
+        /// Extends a line curve by a specified length in both directions.
+        /// Non-line curves are returned unchanged.
         /// </summary>
-        private static (ElementId, ElementId) OrderIds(ElementId a, ElementId b)
+        private static Curve ExtendLine(Curve curve, double extension)
         {
-            return a.Value < b.Value ? (a, b) : (b, a);
+            if (curve is Line line)
+            {
+                XYZ start = line.GetEndPoint(0);
+                XYZ end = line.GetEndPoint(1);
+                XYZ dir = (end - start).Normalize();
+                return Line.CreateBound(start - dir * extension, end + dir * extension);
+            }
+            return curve;
+        }
+
+        /// <summary>
+        /// Trims a line to an intersection point — keeps the farther endpoint
+        /// and replaces the nearer one with the intersection point.
+        /// </summary>
+        private static Curve TrimToIntersection(Curve curve, XYZ point)
+        {
+            if (curve is Line)
+            {
+                XYZ start = curve.GetEndPoint(0);
+                XYZ end = curve.GetEndPoint(1);
+
+                // Replace the endpoint closest to the intersection
+                if (start.DistanceTo(point) < end.DistanceTo(point))
+                    return Line.CreateBound(point, end);
+                else
+                    return Line.CreateBound(start, point);
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Returns a canonical ordered pair for use as a HashSet key.
+        /// </summary>
+        private static (long, long) OrderIds(ElementId a, ElementId b)
+        {
+            return a.Value < b.Value ? (a.Value, b.Value) : (b.Value, a.Value);
         }
 
         /// <summary>
