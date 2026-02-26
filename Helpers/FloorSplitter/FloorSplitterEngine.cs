@@ -74,9 +74,11 @@ namespace BimTasksV2.Helpers.FloorSplitter
             using var txGroup = new TransactionGroup(doc, "Split Compound Floor");
             txGroup.Start();
 
+            bool hasSlope = slopeData.SlopeArrow != null || slopeData.HasShapeEditing;
+
             try
             {
-                // === Transaction 1: Create Replacement Floors ===
+                // === Transaction 1: Create Replacement Floors (FLAT — slope applied later) ===
                 using (var tx1 = new Transaction(doc, "Create Replacement Floors"))
                 {
                     var failOpts = tx1.GetFailureHandlingOptions();
@@ -90,9 +92,9 @@ namespace BimTasksV2.Helpers.FloorSplitter
                         if (layer.ResolvedType == null)
                             FloorTypeResolver.FindOrCreateType(doc, layer);
 
-                        // Create the replacement floor with same boundary and slope
+                        // Always create flat first — openings can't be added to sloped floors
                         var newFloor = Floor.Create(doc, curveLoops, layer.ResolvedType!.Id, levelId,
-                            true, slopeData.SlopeArrow, slopeData.SlopeAngle);
+                            true, null, 0);
                         if (newFloor == null)
                         {
                             Log.Warning("[FloorSplitterEngine] Failed to create floor for layer {Index}", layer.Index);
@@ -113,26 +115,7 @@ namespace BimTasksV2.Helpers.FloorSplitter
                     tx1.Commit();
                 }
 
-                // === Transaction 1.5: Apply Shape Editing (if original had modified vertices) ===
-                if (slopeData.HasShapeEditing && slopeData.VertexOffsets.Count > 0)
-                {
-                    using (var txShape = new Transaction(doc, "Apply Shape Editing"))
-                    {
-                        var failOpts = txShape.GetFailureHandlingOptions();
-                        failOpts.SetFailuresPreprocessor(new SuppressWarningsPreprocessor());
-                        txShape.SetFailureHandlingOptions(failOpts);
-                        txShape.Start();
-
-                        foreach (var replacement in replacements)
-                        {
-                            ApplyShapeEditing(replacement.Floor, slopeData.VertexOffsets);
-                        }
-
-                        txShape.Commit();
-                    }
-                }
-
-                // === Transaction 2: Recreate Openings on Replacement Floors ===
+                // === Transaction 2: Recreate Openings on flat replacement floors ===
                 if (openingBoundaries.Count > 0)
                 {
                     using (var tx2 = new Transaction(doc, "Recreate Floor Openings"))
@@ -164,6 +147,29 @@ namespace BimTasksV2.Helpers.FloorSplitter
                             openingsCreated, replacements.Count);
 
                         tx2.Commit();
+                    }
+                }
+
+                // === Transaction 3: Apply slope AFTER openings are in place ===
+                if (hasSlope)
+                {
+                    using (var txSlope = new Transaction(doc, "Apply Floor Slope"))
+                    {
+                        var failOpts = txSlope.GetFailureHandlingOptions();
+                        failOpts.SetFailuresPreprocessor(new SuppressWarningsPreprocessor());
+                        txSlope.SetFailureHandlingOptions(failOpts);
+                        txSlope.Start();
+
+                        foreach (var replacement in replacements)
+                        {
+                            if (slopeData.SlopeArrow != null)
+                                ApplySlopeViaShapeEditing(replacement.Floor, slopeData.SlopeArrow, slopeData.SlopeAngle);
+
+                            if (slopeData.HasShapeEditing && slopeData.VertexOffsets.Count > 0)
+                                ApplyShapeEditing(replacement.Floor, slopeData.VertexOffsets);
+                        }
+
+                        txSlope.Commit();
                     }
                 }
 
@@ -309,6 +315,53 @@ namespace BimTasksV2.Helpers.FloorSplitter
             }
 
             return data;
+        }
+
+        /// <summary>
+        /// Converts a slope arrow into SlabShapeEditor vertex offsets.
+        /// Projects each vertex onto the arrow direction to compute its Z offset.
+        /// </summary>
+        private static void ApplySlopeViaShapeEditing(Floor newFloor, Line slopeArrow, double slopeAngle)
+        {
+            try
+            {
+                var editor = newFloor.GetSlabShapeEditor();
+                if (editor == null) return;
+
+                editor.Enable();
+
+                // Slope arrow direction in XY plane
+                XYZ arrowStart = slopeArrow.GetEndPoint(0);
+                XYZ arrowEnd = slopeArrow.GetEndPoint(1);
+                XYZ arrowDir2D = new XYZ(arrowEnd.X - arrowStart.X, arrowEnd.Y - arrowStart.Y, 0);
+                double arrowLength = arrowDir2D.GetLength();
+                if (arrowLength < 1e-9) return;
+
+                XYZ arrowDirNorm = arrowDir2D.Normalize();
+
+                foreach (SlabShapeVertex vertex in editor.SlabShapeVertices)
+                {
+                    // Vector from arrow start to vertex (XY only)
+                    XYZ toVertex = new XYZ(
+                        vertex.Position.X - arrowStart.X,
+                        vertex.Position.Y - arrowStart.Y, 0);
+
+                    // Project onto arrow direction — distance along the slope
+                    double projectedDist = toVertex.DotProduct(arrowDirNorm);
+
+                    // Offset = distance along arrow * tan(angle)
+                    double offset = projectedDist * Math.Tan(slopeAngle);
+
+                    if (Math.Abs(offset) > 1e-9)
+                        editor.ModifySubElement(vertex, offset);
+                }
+
+                Log.Information("[FloorSplitterEngine] Applied slope via shape editing on floor {FloorId}", newFloor.Id);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "[FloorSplitterEngine] Failed to apply slope via shape editing on floor {FloorId}", newFloor.Id);
+            }
         }
 
         /// <summary>
