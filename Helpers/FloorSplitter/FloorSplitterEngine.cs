@@ -25,15 +25,14 @@ namespace BimTasksV2.Helpers.FloorSplitter
         /// <summary>Slope arrow line (null if no slope arrow).</summary>
         public Line? SlopeArrow { get; set; }
 
-        /// <summary>Slope ratio (rise/run = tangent of the slope angle). 0 if no slope.</summary>
-        public double SlopeRatio { get; set; }
+        /// <summary>Raw slope value for Floor.Create (from ROOF_SLOPE or computed via Atan).</summary>
+        public double SlopeAngle { get; set; }
 
         /// <summary>True if the floor has shape-edited vertices.</summary>
         public bool HasShapeEditing { get; set; }
 
         /// <summary>
         /// Shape-edited vertex positions with their Z offsets from the base plane.
-        /// Key = (X, Y) position, Value = Z offset.
         /// </summary>
         public List<(XYZ Position, double Offset)> VertexOffsets { get; set; } = new();
     }
@@ -56,6 +55,8 @@ namespace BimTasksV2.Helpers.FloorSplitter
 
             // Read floor parameters before any modifications
             var levelId = floor.LevelId;
+            var level = doc.GetElement(levelId) as Level;
+            double levelZ = level?.Elevation ?? 0;
             double heightOffset = floor.get_Parameter(BuiltInParameter.FLOOR_HEIGHTABOVELEVEL_PARAM)?.AsDouble() ?? 0.0;
 
             // Extract the floor boundary from its sketch
@@ -64,7 +65,8 @@ namespace BimTasksV2.Helpers.FloorSplitter
                 return new FloorSplitResult { Success = false, Message = "Could not extract floor boundary." };
 
             // Record openings hosted on this floor BEFORE any modifications
-            var openingBoundaries = RecordOpenings(doc, floor);
+            // Flatten Z to level elevation so openings work on sloped floors
+            var openingBoundaries = RecordOpenings(doc, floor, levelZ + heightOffset);
 
             // Record slope data (slope arrow or shape editing)
             var slopeData = RecordSlope(doc, floor);
@@ -74,11 +76,9 @@ namespace BimTasksV2.Helpers.FloorSplitter
             using var txGroup = new TransactionGroup(doc, "Split Compound Floor");
             txGroup.Start();
 
-            bool hasSlope = slopeData.SlopeArrow != null || slopeData.HasShapeEditing;
-
             try
             {
-                // === Transaction 1: Create Replacement Floors (FLAT — slope applied later) ===
+                // === Transaction 1: Create Replacement Floors WITH slope ===
                 using (var tx1 = new Transaction(doc, "Create Replacement Floors"))
                 {
                     var failOpts = tx1.GetFailureHandlingOptions();
@@ -92,9 +92,9 @@ namespace BimTasksV2.Helpers.FloorSplitter
                         if (layer.ResolvedType == null)
                             FloorTypeResolver.FindOrCreateType(doc, layer);
 
-                        // Always create flat first — openings can't be added to sloped floors
+                        // Create with slope arrow if original had one
                         var newFloor = Floor.Create(doc, curveLoops, layer.ResolvedType!.Id, levelId,
-                            true, null, 0);
+                            true, slopeData.SlopeArrow, slopeData.SlopeAngle);
                         if (newFloor == null)
                         {
                             Log.Warning("[FloorSplitterEngine] Failed to create floor for layer {Index}", layer.Index);
@@ -115,40 +115,37 @@ namespace BimTasksV2.Helpers.FloorSplitter
                     tx1.Commit();
                 }
 
-                // === Transaction 2: Apply slope on flat floors (before openings) ===
-                if (hasSlope)
+                // === Transaction 1.5: Apply Shape Editing (if original had modified vertices) ===
+                if (slopeData.HasShapeEditing && slopeData.VertexOffsets.Count > 0)
                 {
-                    using (var txSlope = new Transaction(doc, "Apply Floor Slope"))
+                    using (var txShape = new Transaction(doc, "Apply Shape Editing"))
                     {
-                        var failOpts = txSlope.GetFailureHandlingOptions();
+                        var failOpts = txShape.GetFailureHandlingOptions();
                         failOpts.SetFailuresPreprocessor(new SuppressWarningsPreprocessor());
-                        txSlope.SetFailureHandlingOptions(failOpts);
-                        txSlope.Start();
+                        txShape.SetFailureHandlingOptions(failOpts);
+                        txShape.Start();
 
                         foreach (var replacement in replacements)
                         {
-                            if (slopeData.SlopeArrow != null)
-                                ApplySlopeViaShapeEditing(replacement.Floor, slopeData.SlopeArrow, slopeData.SlopeRatio);
-
-                            if (slopeData.HasShapeEditing && slopeData.VertexOffsets.Count > 0)
-                                ApplyShapeEditing(replacement.Floor, slopeData.VertexOffsets);
+                            ApplyShapeEditing(replacement.Floor, slopeData.VertexOffsets);
                         }
 
-                        txSlope.Commit();
+                        txShape.Commit();
                     }
                 }
 
-                // === Transaction 3: Recreate Openings on shape-edited (sloped) floors ===
+                // === Transaction 2: Recreate Openings (with flattened Z curves) ===
+                int openingsCreated = 0;
+                int openingsFailed = 0;
                 if (openingBoundaries.Count > 0)
                 {
-                    using (var tx3 = new Transaction(doc, "Recreate Floor Openings"))
+                    using (var tx2 = new Transaction(doc, "Recreate Floor Openings"))
                     {
-                        var failOpts = tx3.GetFailureHandlingOptions();
+                        var failOpts = tx2.GetFailureHandlingOptions();
                         failOpts.SetFailuresPreprocessor(new SuppressWarningsPreprocessor());
-                        tx3.SetFailureHandlingOptions(failOpts);
-                        tx3.Start();
+                        tx2.SetFailureHandlingOptions(failOpts);
+                        tx2.Start();
 
-                        int openingsCreated = 0;
                         foreach (var replacement in replacements)
                         {
                             foreach (var boundary in openingBoundaries)
@@ -160,16 +157,17 @@ namespace BimTasksV2.Helpers.FloorSplitter
                                 }
                                 catch (Exception ex)
                                 {
+                                    openingsFailed++;
                                     Log.Warning(ex, "[FloorSplitterEngine] Failed to create opening on floor {FloorId}",
                                         replacement.Floor.Id);
                                 }
                             }
                         }
 
-                        Log.Information("[FloorSplitterEngine] Recreated {Count} openings across {Floors} replacement floors",
-                            openingsCreated, replacements.Count);
+                        Log.Information("[FloorSplitterEngine] Openings: {Created} created, {Failed} failed across {Floors} floors",
+                            openingsCreated, openingsFailed, replacements.Count);
 
-                        tx3.Commit();
+                        tx2.Commit();
                     }
                 }
 
@@ -213,8 +211,10 @@ namespace BimTasksV2.Helpers.FloorSplitter
                 txGroup.Assimilate();
 
                 int openingCount = openingBoundaries.Count;
-                string openingMsg = openingCount > 0 ? $" {openingCount} opening(s) transferred." : "";
-                string slopeMsg = slopeData.SlopeArrow != null ? $" Slope preserved (ratio {slopeData.SlopeRatio:F4})." :
+                string openingMsg = openingsCreated > 0 ? $" {openingsCreated} opening(s) transferred." : "";
+                if (openingsFailed > 0)
+                    openingMsg += $" {openingsFailed} opening(s) failed.";
+                string slopeMsg = slopeData.SlopeArrow != null ? " Slope preserved." :
                     slopeData.HasShapeEditing ? " Shape editing preserved." : "";
                 var result = new FloorSplitResult
                 {
@@ -265,16 +265,25 @@ namespace BimTasksV2.Helpers.FloorSplitter
                     {
                         data.SlopeArrow = arrowLine;
 
-                        // Compute slope ratio (rise/run) from start/end heights
-                        double startH = startHeightParam.AsDouble();
-                        var endHeightParam = elem.get_Parameter(BuiltInParameter.SLOPE_END_HEIGHT);
-                        double endH = endHeightParam?.AsDouble() ?? startH;
-                        double length = arrowLine.Length;
-                        if (length > 1e-9)
-                            data.SlopeRatio = (endH - startH) / length;
+                        // Get the slope value from the element (for Floor.Create)
+                        var slopeParam = elem.get_Parameter(BuiltInParameter.ROOF_SLOPE);
+                        if (slopeParam != null)
+                        {
+                            data.SlopeAngle = slopeParam.AsDouble();
+                        }
+                        else
+                        {
+                            // Compute slope from start/end heights
+                            double startH = startHeightParam.AsDouble();
+                            var endHeightParam = elem.get_Parameter(BuiltInParameter.SLOPE_END_HEIGHT);
+                            double endH = endHeightParam?.AsDouble() ?? startH;
+                            double length = arrowLine.Length;
+                            if (length > 1e-9)
+                                data.SlopeAngle = Math.Atan((endH - startH) / length);
+                        }
 
-                        Log.Information("[FloorSplitterEngine] Found slope arrow: ratio={Ratio:F6} (rise/run), startH={StartH:F4}, endH={EndH:F4}, len={Len:F4} on floor {FloorId}",
-                            data.SlopeRatio, startH, endH, length, floor.Id);
+                        Log.Information("[FloorSplitterEngine] Found slope arrow: slopeValue={Slope:F6} on floor {FloorId}",
+                            data.SlopeAngle, floor.Id);
                         break;
                     }
                 }
@@ -306,60 +315,6 @@ namespace BimTasksV2.Helpers.FloorSplitter
             }
 
             return data;
-        }
-
-        /// <summary>
-        /// Converts a slope arrow into SlabShapeEditor vertex offsets.
-        /// Projects each vertex onto the arrow direction to compute its Z offset.
-        /// </summary>
-        private static void ApplySlopeViaShapeEditing(Floor newFloor, Line slopeArrow, double slopeRatio)
-        {
-            try
-            {
-                var editor = newFloor.GetSlabShapeEditor();
-                if (editor == null)
-                {
-                    Log.Warning("[FloorSplitterEngine] SlabShapeEditor is null for floor {FloorId}", newFloor.Id);
-                    return;
-                }
-
-                editor.Enable();
-
-                // Slope arrow direction in XY plane
-                XYZ arrowStart = slopeArrow.GetEndPoint(0);
-                XYZ arrowEnd = slopeArrow.GetEndPoint(1);
-                XYZ arrowDir2D = new XYZ(arrowEnd.X - arrowStart.X, arrowEnd.Y - arrowStart.Y, 0);
-                double arrowLength = arrowDir2D.GetLength();
-                if (arrowLength < 1e-9) return;
-
-                XYZ arrowDirNorm = arrowDir2D.Normalize();
-
-                int vertexCount = 0;
-                foreach (SlabShapeVertex vertex in editor.SlabShapeVertices)
-                {
-                    vertexCount++;
-                    // Vector from arrow start to vertex (XY only)
-                    XYZ toVertex = new XYZ(
-                        vertex.Position.X - arrowStart.X,
-                        vertex.Position.Y - arrowStart.Y, 0);
-
-                    // Project onto arrow direction — distance along the slope
-                    double projectedDist = toVertex.DotProduct(arrowDirNorm);
-
-                    // Offset = distance along arrow * slope ratio (rise/run)
-                    double offset = projectedDist * slopeRatio;
-
-                    if (Math.Abs(offset) > 1e-9)
-                        editor.ModifySubElement(vertex, offset);
-                }
-
-                Log.Information("[FloorSplitterEngine] Applied slope via shape editing: {Count} vertices, ratio={Ratio:F6} on floor {FloorId}",
-                    vertexCount, slopeRatio, newFloor.Id);
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "[FloorSplitterEngine] Failed to apply slope via shape editing on floor {FloorId}", newFloor.Id);
-            }
         }
 
         /// <summary>
@@ -401,9 +356,10 @@ namespace BimTasksV2.Helpers.FloorSplitter
 
         /// <summary>
         /// Records the boundary curves of all openings hosted on a floor.
+        /// Flattens all Z coordinates to flatZ so openings can be recreated on sloped floors.
         /// Must be called BEFORE the original floor is deleted.
         /// </summary>
-        private static List<CurveArray> RecordOpenings(Document doc, Floor floor)
+        private static List<CurveArray> RecordOpenings(Document doc, Floor floor, double flatZ)
         {
             var boundaries = new List<CurveArray>();
 
@@ -423,29 +379,31 @@ namespace BimTasksV2.Helpers.FloorSplitter
                     {
                         if (opening.IsRectBoundary)
                         {
-                            // Rectangular opening — build CurveArray from BoundaryRect points
+                            // Rectangular opening — build CurveArray with flattened Z
                             var pts = opening.BoundaryRect;
                             if (pts != null && pts.Count >= 2)
                             {
                                 var min = pts[0];
                                 var max = pts[1];
                                 var curveArray = new CurveArray();
-                                curveArray.Append(Line.CreateBound(new XYZ(min.X, min.Y, min.Z), new XYZ(max.X, min.Y, min.Z)));
-                                curveArray.Append(Line.CreateBound(new XYZ(max.X, min.Y, min.Z), new XYZ(max.X, max.Y, min.Z)));
-                                curveArray.Append(Line.CreateBound(new XYZ(max.X, max.Y, min.Z), new XYZ(min.X, max.Y, min.Z)));
-                                curveArray.Append(Line.CreateBound(new XYZ(min.X, max.Y, min.Z), new XYZ(min.X, min.Y, min.Z)));
+                                curveArray.Append(Line.CreateBound(new XYZ(min.X, min.Y, flatZ), new XYZ(max.X, min.Y, flatZ)));
+                                curveArray.Append(Line.CreateBound(new XYZ(max.X, min.Y, flatZ), new XYZ(max.X, max.Y, flatZ)));
+                                curveArray.Append(Line.CreateBound(new XYZ(max.X, max.Y, flatZ), new XYZ(min.X, max.Y, flatZ)));
+                                curveArray.Append(Line.CreateBound(new XYZ(min.X, max.Y, flatZ), new XYZ(min.X, min.Y, flatZ)));
                                 boundaries.Add(curveArray);
                             }
                         }
                         else
                         {
-                            // Sketch-based opening — copy boundary curves
+                            // Sketch-based opening — flatten curves to consistent Z
                             var boundaryCurves = opening.BoundaryCurves;
                             if (boundaryCurves != null && boundaryCurves.Size > 0)
                             {
                                 var curveArray = new CurveArray();
                                 foreach (Curve curve in boundaryCurves)
-                                    curveArray.Append(curve);
+                                {
+                                    curveArray.Append(FlattenCurve(curve, flatZ));
+                                }
                                 boundaries.Add(curveArray);
                             }
                         }
@@ -457,8 +415,8 @@ namespace BimTasksV2.Helpers.FloorSplitter
                 }
 
                 if (boundaries.Count > 0)
-                    Log.Information("[FloorSplitterEngine] Recorded {Count} opening(s) from floor {FloorId}",
-                        boundaries.Count, floor.Id);
+                    Log.Information("[FloorSplitterEngine] Recorded {Count} opening(s) from floor {FloorId} (flatZ={FlatZ:F4})",
+                        boundaries.Count, floor.Id, flatZ);
             }
             catch (Exception ex)
             {
@@ -466,6 +424,35 @@ namespace BimTasksV2.Helpers.FloorSplitter
             }
 
             return boundaries;
+        }
+
+        /// <summary>
+        /// Projects a curve to a constant Z elevation while preserving its XY shape.
+        /// </summary>
+        private static Curve FlattenCurve(Curve curve, double z)
+        {
+            if (curve is Line line)
+            {
+                var p0 = line.GetEndPoint(0);
+                var p1 = line.GetEndPoint(1);
+                return Line.CreateBound(new XYZ(p0.X, p0.Y, z), new XYZ(p1.X, p1.Y, z));
+            }
+            else if (curve is Arc arc)
+            {
+                var p0 = arc.GetEndPoint(0);
+                var p1 = arc.GetEndPoint(1);
+                var mid = arc.Evaluate(0.5, true);
+                return Arc.Create(
+                    new XYZ(p0.X, p0.Y, z),
+                    new XYZ(p1.X, p1.Y, z),
+                    new XYZ(mid.X, mid.Y, z));
+            }
+            else
+            {
+                // For other curve types, try tessellation fallback
+                // Just return as-is — most openings are lines/arcs
+                return curve;
+            }
         }
 
         /// <summary>
