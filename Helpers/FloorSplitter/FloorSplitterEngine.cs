@@ -118,9 +118,6 @@ namespace BimTasksV2.Helpers.FloorSplitter
                 // === Transaction 2: Apply slope on flat floors (before openings) ===
                 if (hasSlope)
                 {
-                    // Regenerate to ensure floor geometry is ready for shape editing
-                    doc.Regenerate();
-
                     using (var txSlope = new Transaction(doc, "Apply Floor Slope"))
                     {
                         var failOpts = txSlope.GetFailureHandlingOptions();
