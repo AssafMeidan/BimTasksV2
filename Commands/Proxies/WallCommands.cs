@@ -37,4 +37,8 @@ namespace BimTasksV2.Commands.Proxies
     [Transaction(TransactionMode.Manual)]
     public class SplitWallCommand : Infrastructure.ProxyCommand
     { protected override string HandlerTypeName => "SplitWallHandler"; }
+
+    [Transaction(TransactionMode.Manual)]
+    public class FixSplitCornersCommand : Infrastructure.ProxyCommand
+    { protected override string HandlerTypeName => "FixSplitCornersHandler"; }
 }

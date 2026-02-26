@@ -46,6 +46,7 @@ namespace BimTasksV2.Ribbon
             ["btnAdjustWallHeight"]     = (WallBg, DrawWallFloor),
             ["btnChangeWallHeight"]     = (WallBg, DrawWallHeight),
             ["btnSplitWall"]            = (WallBg, DrawSplitWall),
+            ["btnFixSplitCorners"]     = (WallBg, DrawFixCorners),
             ["btnAddChipuyToWall"]      = (WallBg, DrawCladding),
             ["btnAddChipuyExternal"]    = (WallBg, dc => { DrawCladding(dc); Label(dc, "E", 22); }),
             ["btnAddChipuyInternal"]    = (WallBg, dc => { DrawCladding(dc); Label(dc, "I", 23); }),
@@ -179,13 +180,23 @@ namespace BimTasksV2.Ribbon
 
         private static void DrawSplitWall(DrawingContext dc)
         {
-            // Wall splitting into layers: one thick rect splitting into two thin rects
+            // Wall splitting into layers: three vertical rects with connecting lines
             dc.DrawRectangle(White, null, new Rect(8, 7, 3, 18));
             dc.DrawRectangle(White, null, new Rect(14, 7, 3, 18));
             dc.DrawRectangle(White, null, new Rect(20, 7, 3, 18));
             // Horizontal arrows between layers
             dc.DrawLine(Thin, new Point(11, 16), new Point(14, 16));
             dc.DrawLine(Thin, new Point(17, 16), new Point(20, 16));
+        }
+
+        private static void DrawFixCorners(DrawingContext dc)
+        {
+            // L-corner with check mark: two perpendicular walls meeting
+            dc.DrawRectangle(White, null, new Rect(7, 7, 3, 14));
+            dc.DrawRectangle(White, null, new Rect(7, 21, 18, 3));
+            // Check mark (fix/done)
+            dc.DrawLine(Thick, new Point(19, 11), new Point(22, 15));
+            dc.DrawLine(Thick, new Point(22, 15), new Point(27, 8));
         }
 
         private static void DrawWindow(DrawingContext dc)

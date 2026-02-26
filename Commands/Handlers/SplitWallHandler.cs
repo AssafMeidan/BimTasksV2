@@ -140,6 +140,7 @@ namespace BimTasksV2.Commands.Handlers
                 int succeeded = 0;
                 int failed = 0;
                 var messages = new List<string>();
+                var allResults = new List<SplitResult>();
 
                 foreach (var wall in wallsToSplit)
                 {
@@ -165,6 +166,8 @@ namespace BimTasksV2.Commands.Handlers
                     var result = WallSplitterEngine.SplitWall(
                         doc, wall, wallLayers, dialog.SelectedHostLayerIndex);
 
+                    allResults.Add(result);
+
                     if (result.Success)
                     {
                         succeeded++;
@@ -176,8 +179,28 @@ namespace BimTasksV2.Commands.Handlers
                     }
                 }
 
+                // Save corner fix data for the Fix Split Corners command
+                var successfulResults = allResults.Where(r => r.Success).ToList();
+                if (successfulResults.Count > 0)
+                {
+                    try
+                    {
+                        string filePath = WallSplitterEngine.GetCornerFixDataPath();
+                        WallSplitterEngine.SaveCornerFixData(filePath, successfulResults);
+                        Log.Information("[SplitWallHandler] Saved corner fix data to {FilePath}", filePath);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning(ex, "[SplitWallHandler] Failed to save corner fix data");
+                    }
+                }
+
                 // Show summary
                 string summary = $"Split complete: {succeeded} succeeded, {failed} failed out of {wallsToSplit.Count} wall(s).";
+                if (successfulResults.Count > 0)
+                {
+                    summary += "\n\nClick 'Fix Split Corners' to trim/extend walls at corner intersections.";
+                }
                 if (messages.Count > 0)
                 {
                     summary += "\n\nDetails:\n" + string.Join("\n", messages);
