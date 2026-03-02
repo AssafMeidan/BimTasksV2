@@ -39,7 +39,8 @@
                                     SortDirection="Descending"/>
                 <DataGridTextColumn Header="Wall Type" Binding="{Binding TypeName}" Width="*"/>
                 <DataGridTextColumn Header="Count" Binding="{Binding WallCount}" Width="55"/>
-                <DataGridTextColumn Header="Wall IDs" Binding="{Binding WallIds}" Width="180"/>
+                <DataGridTextColumn Header="Wall IDs" Binding="{Binding WallIds}" Width="160"/>
+                <DataGridTextColumn Header="Keep (ID)" Binding="{Binding KeepWallId}" Width="75"/>
             </DataGrid.Columns>
         </DataGrid>
 
@@ -50,7 +51,7 @@
                              GroupName="Action" IsChecked="True" Margin="0,2"/>
                 <RadioButton x:Name="RbUnjoin" Content="Unjoin — Separate geometry so duplicates become visible"
                              GroupName="Action" Margin="0,2"/>
-                <RadioButton x:Name="RbDelete" Content="Delete duplicates — Keep oldest wall, delete the rest"
+                <RadioButton x:Name="RbDelete" Content="Delete duplicates — Keep wall with most hosted elements"
                              GroupName="Action" Margin="0,2"/>
             </StackPanel>
         </GroupBox>

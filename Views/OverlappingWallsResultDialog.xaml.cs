@@ -23,6 +23,7 @@ namespace BimTasksV2.Views
         public string TypeName { get; set; } = "";
         public int WallCount { get; set; }
         public string WallIds { get; set; } = "";
+        public string KeepWallId { get; set; } = "";
     }
 
     public partial class OverlappingWallsResultDialog : Window
@@ -46,6 +47,14 @@ namespace BimTasksV2.Views
             for (int i = 0; i < sorted.Count; i++)
             {
                 var g = sorted[i];
+
+                // Find wall with most hosted elements (doors, windows, etc.)
+                var best = g.Walls
+                    .OrderByDescending(w => CountHosted(doc, w))
+                    .ThenBy(w => w.Id.Value)
+                    .First();
+                int bestHosted = CountHosted(doc, best);
+
                 Groups.Add(new OverlappingGroupRow
                 {
                     Index = i + 1,
@@ -54,10 +63,29 @@ namespace BimTasksV2.Views
                     TypeName = g.WallType.Name,
                     WallCount = g.Walls.Count,
                     WallIds = string.Join(", ", g.Walls.Select(w => w.Id.Value)),
+                    KeepWallId = bestHosted > 0
+                        ? $"{best.Id.Value} ({bestHosted})"
+                        : $"{best.Id.Value}",
                 });
             }
 
             DataContext = this;
+        }
+
+        private static int CountHosted(Document doc, Wall wall)
+        {
+            var filter = new LogicalOrFilter(new ElementFilter[]
+            {
+                new ElementCategoryFilter(BuiltInCategory.OST_Doors),
+                new ElementCategoryFilter(BuiltInCategory.OST_Windows),
+                new ElementCategoryFilter(BuiltInCategory.OST_GenericModel),
+            });
+
+            return new FilteredElementCollector(doc)
+                .WherePasses(filter)
+                .WhereElementIsNotElementType()
+                .Where(e => e is FamilyInstance fi && fi.Host?.Id == wall.Id)
+                .Count();
         }
 
         private void ApplyButton_Click(object sender, RoutedEventArgs e)

@@ -14,7 +14,7 @@ namespace BimTasksV2.Helpers.OverlappingWallDetector
         public WallType WallType { get; set; } = null!;
         public List<Wall> Walls { get; set; } = new();
         public double OverlapLength { get; set; }
-        /// <summary>Overlap as percentage of the shorter wall (0–100).</summary>
+        /// <summary>Width overlap percentage (0–100). 100% = centerlines identical, less = offset.</summary>
         public double OverlapPercent { get; set; }
     }
 
@@ -26,11 +26,9 @@ namespace BimTasksV2.Helpers.OverlappingWallDetector
     public static class OverlappingWallsDetector
     {
         /// <summary>
-        /// Perpendicular distance tolerance: half the wall width.
-        /// Same-type walls whose centerlines are closer than this physically overlap.
-        /// Computed per-pair, so this constant is not used — see GetOverlapLength.
+        /// Fallback max distance if wall width is unavailable.
         /// </summary>
-        private const double FallbackDistanceTolerance = 0.5;  // ~150 mm fallback
+        private const double FallbackDistanceTolerance = 0.5;  // ~150 mm
 
         /// <summary>
         /// Minimum overlap length in feet to consider walls overlapping (≈50 mm).
@@ -43,14 +41,18 @@ namespace BimTasksV2.Helpers.OverlappingWallDetector
         /// </summary>
         private const double AngleTolerance = 0.018;
 
+        private struct OverlapResult
+        {
+            public double Length;
+            public double PerpDistance;
+            public bool IsOverlapping;
+        }
+
         /// <summary>
         /// Finds groups of same-type walls that overlap each other.
         /// </summary>
-        /// <param name="walls">Walls to analyze.</param>
-        /// <returns>List of overlapping wall groups (each with 2+ walls).</returns>
         public static List<OverlappingWallGroup> FindOverlappingWalls(IList<Wall> walls)
         {
-            // Group by WallType to only compare same-type walls
             var byType = walls
                 .Where(w => w.Location is LocationCurve)
                 .GroupBy(w => w.WallType.Id.Value)
@@ -70,37 +72,41 @@ namespace BimTasksV2.Helpers.OverlappingWallDetector
 
                     var group = new List<Wall> { wallList[i] };
                     double maxOverlap = 0;
-                    double maxPercent = 0;
+                    double minPerpDist = double.MaxValue;
 
                     for (int j = i + 1; j < wallList.Count; j++)
                     {
                         if (visited.Contains(wallList[j].Id))
                             continue;
 
-                        double overlap = GetOverlapLength(wallList[i], wallList[j]);
-                        if (overlap >= MinOverlapLength)
+                        var overlap = CheckOverlap(wallList[i], wallList[j]);
+                        if (overlap.IsOverlapping && overlap.Length >= MinOverlapLength)
                         {
                             group.Add(wallList[j]);
                             visited.Add(wallList[j].Id);
-                            maxOverlap = Math.Max(maxOverlap, overlap);
-
-                            double shorterLen = Math.Min(
-                                ((LocationCurve)wallList[i].Location).Curve.Length,
-                                ((LocationCurve)wallList[j].Location).Curve.Length);
-                            double pct = shorterLen > 0 ? (overlap / shorterLen) * 100.0 : 0;
-                            maxPercent = Math.Max(maxPercent, pct);
+                            maxOverlap = Math.Max(maxOverlap, overlap.Length);
+                            minPerpDist = Math.Min(minPerpDist, overlap.PerpDistance);
                         }
                     }
 
                     if (group.Count >= 2)
                     {
                         visited.Add(wallList[i].Id);
+
+                        // Width overlap: how much of the wall width is shared
+                        // wallWidth = total width. Two same-type walls overlap by (width - perpDist)
+                        // When perpDist=0, overlap=100%. When perpDist=width, overlap=0%.
+                        double wallWidth = wallList[i].Width;
+                        double widthOverlap = wallWidth > 0
+                            ? Math.Max(0, (wallWidth - minPerpDist) / wallWidth) * 100.0
+                            : 100.0;
+
                         result.Add(new OverlappingWallGroup
                         {
                             WallType = wallList[i].WallType,
                             Walls = group,
                             OverlapLength = maxOverlap,
-                            OverlapPercent = maxPercent
+                            OverlapPercent = widthOverlap
                         });
                     }
                 }
@@ -110,47 +116,41 @@ namespace BimTasksV2.Helpers.OverlappingWallDetector
         }
 
         /// <summary>
-        /// Returns the overlap length between two walls if they are nearly coincident,
-        /// or 0 if they are not overlapping.
+        /// Checks if two walls overlap and returns overlap length + perpendicular distance.
         /// </summary>
-        private static double GetOverlapLength(Wall w1, Wall w2)
+        private static OverlapResult CheckOverlap(Wall w1, Wall w2)
         {
             var curve1 = ((LocationCurve)w1.Location).Curve;
             var curve2 = ((LocationCurve)w2.Location).Curve;
 
             // Only handle linear walls (v1)
             if (curve1 is not Line line1 || curve2 is not Line line2)
-                return 0;
+                return default;
 
             // Check parallel
             var dir1 = line1.Direction;
             var dir2 = line2.Direction;
             double cross = Math.Abs(dir1.X * dir2.Y - dir1.Y * dir2.X);
             if (cross > AngleTolerance)
-                return 0;
+                return default;
 
-            // Check perpendicular distance — must be less than the wall width
-            // (same-type walls, so both have the same width; if centerlines are
-            // closer than the width, the walls physically overlap)
+            // Perpendicular distance between the two lines
             var delta = line2.GetEndPoint(0) - line1.GetEndPoint(0);
-            // Perpendicular component (in XY plane)
             var perp = delta - dir1.DotProduct(delta) * dir1;
             double perpDist = Math.Sqrt(perp.X * perp.X + perp.Y * perp.Y);
             double maxDist = Math.Max(w1.Width, FallbackDistanceTolerance);
             if (perpDist > maxDist)
-                return 0;
+                return default;
 
-            // Check different base levels — same-type walls on different levels aren't overlapping
+            // Check different base levels
             var level1 = w1.get_Parameter(BuiltInParameter.WALL_BASE_CONSTRAINT)?.AsElementId();
             var level2 = w2.get_Parameter(BuiltInParameter.WALL_BASE_CONSTRAINT)?.AsElementId();
             if (level1 != null && level2 != null && level1 != level2)
-                return 0;
+                return default;
 
-            // Project both walls onto the same line direction to find overlap span
+            // Project both walls onto the same direction to find overlap span
             double a1 = dir1.DotProduct(line1.GetEndPoint(0));
             double b1 = dir1.DotProduct(line1.GetEndPoint(1));
-
-            // For wall 2, project onto wall 1's direction (they're parallel)
             double a2 = dir1.DotProduct(line2.GetEndPoint(0));
             double b2 = dir1.DotProduct(line2.GetEndPoint(1));
 
@@ -161,7 +161,15 @@ namespace BimTasksV2.Helpers.OverlappingWallDetector
             double overlapEnd = Math.Min(max1, max2);
             double overlapLength = overlapEnd - overlapStart;
 
-            return overlapLength > 0 ? overlapLength : 0;
+            if (overlapLength <= 0)
+                return default;
+
+            return new OverlapResult
+            {
+                Length = overlapLength,
+                PerpDistance = perpDist,
+                IsOverlapping = true
+            };
         }
     }
 }
