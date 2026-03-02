@@ -135,11 +135,12 @@ namespace BimTasksV2.Helpers.OverlappingWallDetector
                 return default;
 
             // Perpendicular distance between the two lines
+            // Must be strictly less than wall width — at exactly wallWidth they just touch edges
             var delta = line2.GetEndPoint(0) - line1.GetEndPoint(0);
             var perp = delta - dir1.DotProduct(delta) * dir1;
             double perpDist = Math.Sqrt(perp.X * perp.X + perp.Y * perp.Y);
-            double maxDist = Math.Max(w1.Width, FallbackDistanceTolerance);
-            if (perpDist > maxDist)
+            double wallWidth = Math.Max(w1.Width, FallbackDistanceTolerance);
+            if (perpDist >= wallWidth)
                 return default;
 
             // Check different base levels
