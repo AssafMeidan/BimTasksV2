@@ -139,8 +139,10 @@ namespace BimTasksV2.Helpers.OverlappingWallDetector
             var delta = line2.GetEndPoint(0) - line1.GetEndPoint(0);
             var perp = delta - dir1.DotProduct(delta) * dir1;
             double perpDist = Math.Sqrt(perp.X * perp.X + perp.Y * perp.Y);
+            // Only flag walls overlapping by more than 50% of width
+            // (perpDist < halfWidth means >50% width overlap)
             double wallWidth = Math.Max(w1.Width, FallbackDistanceTolerance);
-            if (perpDist >= wallWidth)
+            if (perpDist >= wallWidth * 0.5)
                 return default;
 
             // Check different base levels
