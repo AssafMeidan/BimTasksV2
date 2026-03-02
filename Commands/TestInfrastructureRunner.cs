@@ -172,8 +172,8 @@ namespace BimTasksV2.Commands.Handlers
         {
             _report.AppendLine("--- Section 4: Dockable Panel & View Switching ---");
 
-            TestStep("BimTasksApp.DockablePaneId is set",
-                () => BimTasksApp.DockablePaneId != null);
+            TestStep("BimTasksBootstrapper.DockablePaneId is set",
+                () => BimTasksV2.Infrastructure.BimTasksBootstrapper.DockablePaneId != null);
 
             try
             {

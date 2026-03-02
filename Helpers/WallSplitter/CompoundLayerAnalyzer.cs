@@ -61,8 +61,9 @@ namespace BimTasksV2.Helpers.WallSplitter
 
             double totalWidth = wallType.Width;
 
-            // Compute location line offset from exterior face
-            double locationLineFromExterior = GetLocationLineOffsetFromExterior(wall, cs, totalWidth);
+            // LocationCurve.Curve always returns the wall centerline regardless of
+            // WALL_KEY_REF_PARAM, so always compute offsets from the centerline.
+            double locationLineFromExterior = totalWidth / 2.0;
 
             // Running distance from exterior face
             double runningDistance = 0.0;

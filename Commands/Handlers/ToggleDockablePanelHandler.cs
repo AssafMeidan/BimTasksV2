@@ -7,7 +7,8 @@ namespace BimTasksV2.Commands.Handlers
 {
     /// <summary>
     /// Toggles the BimTasks dockable pane visibility.
-    /// Uses DockablePane.Show() / Hide() via the pane ID registered during startup.
+    /// Uses BimTasksBootstrapper.DockablePaneId (isolated ALC) instead of BimTasksApp.DockablePaneId
+    /// (default ALC) because handlers run in the isolated context.
     /// </summary>
     public class ToggleDockablePanelHandler : ICommandHandler
     {
@@ -15,14 +16,8 @@ namespace BimTasksV2.Commands.Handlers
         {
             try
             {
-                var paneId = BimTasksApp.DockablePaneId;
-                if (paneId == null)
-                {
-                    TaskDialog.Show("BimTasksV2", "Dockable pane not registered.");
-                    return;
-                }
-
-                DockablePane pane = uiApp.GetDockablePane(paneId);
+                DockablePane pane = uiApp.GetDockablePane(
+                    BimTasksV2.Infrastructure.BimTasksBootstrapper.DockablePaneId);
                 if (pane == null)
                 {
                     TaskDialog.Show("BimTasksV2", "Dockable pane not found.");

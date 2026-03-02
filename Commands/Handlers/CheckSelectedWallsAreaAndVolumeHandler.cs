@@ -34,13 +34,9 @@ namespace BimTasksV2.Commands.Handlers
                 eventAggregator.GetEvent<BimTasksEvents.CalculateElementsEvent>().Publish(null);
 
                 // Ensure the dockable pane is visible
-                var paneId = BimTasksApp.DockablePaneId;
-                if (paneId != null)
-                {
-                    DockablePane pane = uiApp.GetDockablePane(paneId);
-                    if (pane != null && !pane.IsShown())
-                        pane.Show();
-                }
+                var pane = uiApp.GetDockablePane(BimTasksV2.Infrastructure.BimTasksBootstrapper.DockablePaneId);
+                if (pane != null && !pane.IsShown())
+                    pane.Show();
 
                 Log.Information("CheckSelectedWallsAreaAndVolume: Published CalculateElementsEvent");
             }

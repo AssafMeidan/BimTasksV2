@@ -409,13 +409,9 @@ namespace BimTasksV2.Services
 
         private static void ShowDockablePane(UIApplication uiApp)
         {
-            var paneId = BimTasksApp.DockablePaneId;
-            if (paneId != null)
-            {
-                var pane = uiApp.GetDockablePane(paneId);
-                if (pane != null && !pane.IsShown())
-                    pane.Show();
-            }
+            var pane = uiApp.GetDockablePane(BimTasksV2.Infrastructure.BimTasksBootstrapper.DockablePaneId);
+            if (pane != null && !pane.IsShown())
+                pane.Show();
         }
 
         private static void TempHideElements(UIApplication uiApp)
