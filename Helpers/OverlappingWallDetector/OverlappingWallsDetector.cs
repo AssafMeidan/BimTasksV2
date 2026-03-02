@@ -26,10 +26,11 @@ namespace BimTasksV2.Helpers.OverlappingWallDetector
     public static class OverlappingWallsDetector
     {
         /// <summary>
-        /// Perpendicular distance tolerance in feet (≈5 mm).
-        /// Same-type walls with identical centerlines will have distance ≈ 0.
+        /// Perpendicular distance tolerance: half the wall width.
+        /// Same-type walls whose centerlines are closer than this physically overlap.
+        /// Computed per-pair, so this constant is not used — see GetOverlapLength.
         /// </summary>
-        private const double DistanceTolerance = 0.016;  // ~5 mm
+        private const double FallbackDistanceTolerance = 0.5;  // ~150 mm fallback
 
         /// <summary>
         /// Minimum overlap length in feet to consider walls overlapping (≈50 mm).
@@ -128,12 +129,15 @@ namespace BimTasksV2.Helpers.OverlappingWallDetector
             if (cross > AngleTolerance)
                 return 0;
 
-            // Check perpendicular distance between the two lines
+            // Check perpendicular distance — must be less than the wall width
+            // (same-type walls, so both have the same width; if centerlines are
+            // closer than the width, the walls physically overlap)
             var delta = line2.GetEndPoint(0) - line1.GetEndPoint(0);
             // Perpendicular component (in XY plane)
             var perp = delta - dir1.DotProduct(delta) * dir1;
             double perpDist = Math.Sqrt(perp.X * perp.X + perp.Y * perp.Y);
-            if (perpDist > DistanceTolerance)
+            double maxDist = Math.Max(w1.Width, FallbackDistanceTolerance);
+            if (perpDist > maxDist)
                 return 0;
 
             // Check different base levels — same-type walls on different levels aren't overlapping
@@ -143,13 +147,12 @@ namespace BimTasksV2.Helpers.OverlappingWallDetector
                 return 0;
 
             // Project both walls onto the same line direction to find overlap span
-            double a1 = dir1.DotProduct(line1.GetEndPoint(0).IsAlmostEqualTo(XYZ.Zero)
-                ? line1.GetEndPoint(0) : (XYZ)line1.GetEndPoint(0));
-            double b1 = dir1.DotProduct((XYZ)line1.GetEndPoint(1));
+            double a1 = dir1.DotProduct(line1.GetEndPoint(0));
+            double b1 = dir1.DotProduct(line1.GetEndPoint(1));
 
             // For wall 2, project onto wall 1's direction (they're parallel)
-            double a2 = dir1.DotProduct((XYZ)line2.GetEndPoint(0));
-            double b2 = dir1.DotProduct((XYZ)line2.GetEndPoint(1));
+            double a2 = dir1.DotProduct(line2.GetEndPoint(0));
+            double b2 = dir1.DotProduct(line2.GetEndPoint(1));
 
             double min1 = Math.Min(a1, b1), max1 = Math.Max(a1, b1);
             double min2 = Math.Min(a2, b2), max2 = Math.Max(a2, b2);
