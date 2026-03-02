@@ -18,10 +18,11 @@ namespace BimTasksV2.Views
     public class OverlappingGroupRow
     {
         public int Index { get; set; }
+        public double OverlapPercent { get; set; }
+        public string OverlapPercentText { get; set; } = "";
         public string TypeName { get; set; } = "";
         public int WallCount { get; set; }
         public string WallIds { get; set; } = "";
-        public string OverlapMeters { get; set; } = "";
     }
 
     public partial class OverlappingWallsResultDialog : Window
@@ -36,19 +37,23 @@ namespace BimTasksV2.Views
         {
             InitializeComponent();
 
-            int totalWalls = groups.Sum(g => g.Walls.Count);
-            SummaryText = $"Found {groups.Count} overlapping group(s) containing {totalWalls} walls";
+            // Sort by overlap percentage descending — exact duplicates (100%) first
+            var sorted = groups.OrderByDescending(g => g.OverlapPercent).ToList();
 
-            for (int i = 0; i < groups.Count; i++)
+            int totalWalls = sorted.Sum(g => g.Walls.Count);
+            SummaryText = $"Found {sorted.Count} overlapping group(s) containing {totalWalls} walls";
+
+            for (int i = 0; i < sorted.Count; i++)
             {
-                var g = groups[i];
+                var g = sorted[i];
                 Groups.Add(new OverlappingGroupRow
                 {
                     Index = i + 1,
+                    OverlapPercent = g.OverlapPercent,
+                    OverlapPercentText = $"{g.OverlapPercent:F0}%",
                     TypeName = g.WallType.Name,
                     WallCount = g.Walls.Count,
                     WallIds = string.Join(", ", g.Walls.Select(w => w.Id.Value)),
-                    OverlapMeters = $"{g.OverlapLength * 0.3048:F2}"
                 });
             }
 

@@ -35,10 +35,11 @@
                   Margin="0,0,0,8">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="#" Binding="{Binding Index}" Width="35"/>
+                <DataGridTextColumn Header="Overlap %" Binding="{Binding OverlapPercentText}" Width="75"
+                                    SortDirection="Descending"/>
                 <DataGridTextColumn Header="Wall Type" Binding="{Binding TypeName}" Width="*"/>
                 <DataGridTextColumn Header="Count" Binding="{Binding WallCount}" Width="55"/>
                 <DataGridTextColumn Header="Wall IDs" Binding="{Binding WallIds}" Width="180"/>
-                <DataGridTextColumn Header="Overlap (m)" Binding="{Binding OverlapMeters}" Width="85"/>
             </DataGrid.Columns>
         </DataGrid>
 

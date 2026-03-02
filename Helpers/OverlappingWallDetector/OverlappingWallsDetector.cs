@@ -14,6 +14,8 @@ namespace BimTasksV2.Helpers.OverlappingWallDetector
         public WallType WallType { get; set; } = null!;
         public List<Wall> Walls { get; set; } = new();
         public double OverlapLength { get; set; }
+        /// <summary>Overlap as percentage of the shorter wall (0–100).</summary>
+        public double OverlapPercent { get; set; }
     }
 
     /// <summary>
@@ -67,6 +69,7 @@ namespace BimTasksV2.Helpers.OverlappingWallDetector
 
                     var group = new List<Wall> { wallList[i] };
                     double maxOverlap = 0;
+                    double maxPercent = 0;
 
                     for (int j = i + 1; j < wallList.Count; j++)
                     {
@@ -79,6 +82,12 @@ namespace BimTasksV2.Helpers.OverlappingWallDetector
                             group.Add(wallList[j]);
                             visited.Add(wallList[j].Id);
                             maxOverlap = Math.Max(maxOverlap, overlap);
+
+                            double shorterLen = Math.Min(
+                                ((LocationCurve)wallList[i].Location).Curve.Length,
+                                ((LocationCurve)wallList[j].Location).Curve.Length);
+                            double pct = shorterLen > 0 ? (overlap / shorterLen) * 100.0 : 0;
+                            maxPercent = Math.Max(maxPercent, pct);
                         }
                     }
 
@@ -89,7 +98,8 @@ namespace BimTasksV2.Helpers.OverlappingWallDetector
                         {
                             WallType = wallList[i].WallType,
                             Walls = group,
-                            OverlapLength = maxOverlap
+                            OverlapLength = maxOverlap,
+                            OverlapPercent = maxPercent
                         });
                     }
                 }
