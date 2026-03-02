@@ -46,6 +46,7 @@ namespace BimTasksV2.Ribbon
             ["btnAdjustWallHeight"]     = (WallBg, DrawWallFloor),
             ["btnChangeWallHeight"]     = (WallBg, DrawWallHeight),
             ["btnSplitWall"]            = (WallBg, DrawSplitWall),
+            ["btnDetectOverlapping"]    = (WallBg, DrawOverlapping),
             ["btnAddChipuyToWall"]      = (WallBg, DrawCladding),
             ["btnAddChipuyExternal"]    = (WallBg, dc => { DrawCladding(dc); Label(dc, "E", 22); }),
             ["btnAddChipuyInternal"]    = (WallBg, dc => { DrawCladding(dc); Label(dc, "I", 23); }),
@@ -187,6 +188,19 @@ namespace BimTasksV2.Ribbon
             // Horizontal arrows between layers
             dc.DrawLine(Thin, new Point(11, 16), new Point(14, 16));
             dc.DrawLine(Thin, new Point(17, 16), new Point(20, 16));
+        }
+
+        private static void DrawOverlapping(DrawingContext dc)
+        {
+            // Two overlapping wall rectangles with warning indicator
+            dc.DrawRectangle(null, Thick, new Rect(6, 8, 4, 16));
+            dc.DrawRectangle(null, Thick, new Rect(12, 8, 4, 16));
+            // Overlap highlight: filled rect between them
+            dc.DrawRectangle(White, null, new Rect(18, 8, 4, 16));
+            dc.DrawRectangle(null, Thick, new Rect(18, 8, 4, 16));
+            // Warning exclamation mark
+            dc.DrawLine(Thick, new Point(27, 10), new Point(27, 18));
+            dc.DrawEllipse(White, null, new Point(27, 22), 1.2, 1.2);
         }
 
         private static void DrawWindow(DrawingContext dc)

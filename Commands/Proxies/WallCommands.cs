@@ -38,4 +38,8 @@ namespace BimTasksV2.Commands.Proxies
     public class SplitWallCommand : Infrastructure.ProxyCommand
     { protected override string HandlerTypeName => "SplitWallHandler"; }
 
+    [Transaction(TransactionMode.Manual)]
+    public class DetectOverlappingWallsCommand : Infrastructure.ProxyCommand
+    { protected override string HandlerTypeName => "DetectOverlappingWallsHandler"; }
+
 }

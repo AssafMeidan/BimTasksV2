@@ -51,6 +51,11 @@ namespace BimTasksV2.Ribbon
                 "Split\nWall",
                 "BimTasksV2.Commands.Proxies.SplitWallCommand"),
 
+            new ButtonDef(
+                "btnDetectOverlapping",
+                "Detect\nOverlaps",
+                "BimTasksV2.Commands.Proxies.DetectOverlappingWallsCommand"),
+
             // Cladding split button members (added as SplitButton in RibbonBuilder)
             new ButtonDef(
                 "btnAddChipuyToWall",
@@ -74,8 +79,8 @@ namespace BimTasksV2.Ribbon
         };
 
         // Indices into WallButtons for the cladding SplitButton
-        public const int CladdingSplitStart = 5; // AddChipuyToWall
-        public const int CladdingSplitEnd = 7;   // AddChipuyToInternal (inclusive)
+        public const int CladdingSplitStart = 6; // AddChipuyToWall
+        public const int CladdingSplitEnd = 8;   // AddChipuyToInternal (inclusive)
 
         // =====================================================================
         // Panel 2: Structure (2 buttons)
