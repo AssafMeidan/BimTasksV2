@@ -159,7 +159,7 @@ namespace BimTasksV2.Ribbon
         };
 
         // =====================================================================
-        // Panel 5: Tools (8 regular + SplitButton)
+        // Panel 5: Tools (9 regular + SplitButton)
         // =====================================================================
 
         public static readonly ButtonDef[] ToolButtons = new[]
@@ -213,6 +213,11 @@ namespace BimTasksV2.Ribbon
                 "btnImportAllDwgFloors",
                 "Floors From\nDWG All",
                 "BimTasksV2.Commands.Proxies.ImportAllDwgFloorsCommand"),
+
+            new ButtonDef(
+                "btnColorCodeByParam",
+                "Color\nCode",
+                "BimTasksV2.Commands.Proxies.ColorCodeByParameterCommand"),
         };
 
         /// <summary>

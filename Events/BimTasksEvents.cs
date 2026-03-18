@@ -40,5 +40,10 @@ namespace BimTasksV2.Events
         /// Raised to toggle the floating toolbar window visibility.
         /// </summary>
         public class ToggleFloatingToolbarEvent : PubSubEvent<object> { }
+
+        /// <summary>
+        /// Raised when the Color Code by Parameter panel opens to scan for parameters.
+        /// </summary>
+        public class ColorCodeInitEvent : PubSubEvent<object> { }
     }
 }

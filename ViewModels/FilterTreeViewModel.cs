@@ -24,6 +24,9 @@ namespace BimTasksV2.ViewModels
         private static readonly HashSet<BuiltInParameter> IncludedBuiltInParameters =
             CategoryFilterHelper.GetBuiltParamsToInclude();
 
+        private static readonly HashSet<string> IncludedDoubleParamNames =
+            CategoryFilterHelper.GetDoubleParamNamesToInclude();
+
         private static readonly HashSet<BuiltInCategory> CategoriesToInclude =
             new(CategoryFilterHelper.GetCategoriesToInclude());
 
@@ -290,9 +293,9 @@ namespace BimTasksV2.ViewModels
                     name.Equals("Id", StringComparison.OrdinalIgnoreCase))
                     return true;
 
-                // Exclude Double (dimension) parameters unless they're in the BuiltIn list
+                // Exclude Double (dimension) parameters unless in the BuiltIn list or name whitelist
                 if (param.StorageType == StorageType.Double)
-                    return true;
+                    return !IncludedDoubleParamNames.Contains(name);
 
                 return false;
             }

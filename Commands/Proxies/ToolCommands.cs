@@ -33,4 +33,8 @@ namespace BimTasksV2.Commands.Proxies
     [Transaction(TransactionMode.Manual)]
     public class ToggleVoskVoiceRecognitionCommand : Infrastructure.ProxyCommand
     { protected override string HandlerTypeName => "ToggleVoskVoiceRecognitionHandler"; }
+
+    [Transaction(TransactionMode.Manual)]
+    public class ColorCodeByParameterCommand : Infrastructure.ProxyCommand
+    { protected override string HandlerTypeName => "ColorCodeByParameterHandler"; }
 }

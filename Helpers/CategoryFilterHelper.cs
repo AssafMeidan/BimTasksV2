@@ -1,3 +1,4 @@
+using System;
 using Autodesk.Revit.DB;
 using System.Collections.Generic;
 
@@ -69,6 +70,7 @@ namespace BimTasksV2.Helpers
                 BuiltInParameter.ASSOCIATED_LEVEL_OFFSET,
                 BuiltInParameter.WALL_BASE_OFFSET,
                 BuiltInParameter.WALL_BASE_HEIGHT_PARAM,
+                BuiltInParameter.WALL_USER_HEIGHT_PARAM,
                 BuiltInParameter.WALL_TOP_OFFSET,
                 BuiltInParameter.WINDOW_HEIGHT,
                 BuiltInParameter.WINDOW_WIDTH,
@@ -90,6 +92,21 @@ namespace BimTasksV2.Helpers
                 BuiltInParameter.INSTANCE_SILL_HEIGHT_PARAM,
                 BuiltInParameter.INSTANCE_FREE_HOST_OFFSET_PARAM,
                 BuiltInParameter.STAIRS_BASE_OFFSET,
+            };
+        }
+
+        /// <summary>
+        /// Returns parameter names (case-insensitive) that should be included
+        /// even when they are Double-type family parameters without a BuiltInParameter ID.
+        /// Covers dimensions like Depth/Height on foundations and structural columns.
+        /// </summary>
+        public static HashSet<string> GetDoubleParamNamesToInclude()
+        {
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "Unconnected Height",
+                "Depth",
+                "Height",
             };
         }
     }

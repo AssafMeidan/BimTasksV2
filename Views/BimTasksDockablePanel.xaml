@@ -9,28 +9,64 @@
       mc:Ignorable="d"
       Background="#FAFAFA">
 
+    <Page.Resources>
+        <Style x:Key="CloseTabButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="4,1"/>
+            <Setter Property="Margin" Value="6,0,0,0"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="#888"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}"
+                                CornerRadius="3" Padding="{TemplateBinding Padding}">
+                            <TextBlock Text="✕" FontSize="{TemplateBinding FontSize}"
+                                       Foreground="{TemplateBinding Foreground}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#22000000"/>
+                                <Setter Property="Foreground" Value="#333"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Page.Resources>
+
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
+        <!-- Tabbed content area -->
+        <TabControl ItemsSource="{Binding Tabs}"
+                    SelectedItem="{Binding SelectedTab}"
+                    Background="Transparent"
+                    BorderThickness="0,1,0,0"
+                    BorderBrush="#DDD"
+                    Padding="0">
+            <TabControl.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Title}" VerticalAlignment="Center" FontSize="12"/>
+                        <Button Style="{StaticResource CloseTabButton}"
+                                Command="{Binding DataContext.CloseTabCommand, RelativeSource={RelativeSource AncestorType=TabControl}}"
+                                CommandParameter="{Binding}"/>
+                    </StackPanel>
+                </DataTemplate>
+            </TabControl.ItemTemplate>
+            <TabControl.ContentTemplate>
+                <DataTemplate>
+                    <ContentPresenter Content="{Binding Content}"/>
+                </DataTemplate>
+            </TabControl.ContentTemplate>
+        </TabControl>
 
-        <!-- Header bar -->
-        <Border Grid.Row="0" Background="#1565C0" Padding="10,8">
-            <TextBlock Text="{Binding PanelTitle}"
-                       FontWeight="SemiBold" FontSize="14"
-                       Foreground="White"/>
-        </Border>
-
-        <!-- Dynamic content area -->
-        <ContentControl Grid.Row="1"
-                        Content="{Binding CurrentView}"
-                        HorizontalContentAlignment="Stretch"
-                        VerticalContentAlignment="Stretch"/>
-
-        <!-- Empty state when no view is loaded -->
-        <TextBlock Grid.Row="1"
-                   Text="Click a command in the BimTasks toolbar to display content here."
+        <!-- Empty state when no tabs are open -->
+        <TextBlock Text="Click a command in the BimTasks toolbar to display content here."
                    HorizontalAlignment="Center"
                    VerticalAlignment="Center"
                    TextWrapping="Wrap"
