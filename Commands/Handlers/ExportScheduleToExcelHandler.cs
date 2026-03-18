@@ -42,7 +42,7 @@ namespace BimTasksV2.Commands.Handlers
 
                 // Export
                 var container = BimTasksV2.Infrastructure.ContainerLocator.Container;
-                var service = container.Resolve<ScheduleExcelRoundtripService>();
+                var service = container.Resolve<ScheduleExportService>();
                 service.ExportScheduleToExcel(schedule, filePath);
 
                 TaskDialog.Show("BimTasksV2",

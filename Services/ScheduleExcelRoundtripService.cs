@@ -81,6 +81,7 @@ namespace BimTasksV2.Services
                 for (int col = DataStartColumn; col <= lastCol; col++)
                 {
                     string header = ws.Cell(HeaderRow, col).GetString().Trim();
+                    // Support legacy files that had " (read-only)" suffix
                     if (header.EndsWith(" (read-only)"))
                         header = header.Substring(0, header.Length - " (read-only)".Length);
 
@@ -95,6 +96,24 @@ namespace BimTasksV2.Services
                     return result;
                 }
 
+                // Build lookup table if overflow sheet exists
+                var groupLookup = new Dictionary<string, List<ElementId>>();
+                if (workbook.Worksheets.TryGetWorksheet("__Lookup__", out var lookupWs))
+                {
+                    int lookupLastRow = lookupWs.LastRowUsed()?.RowNumber() ?? 0;
+                    for (int lr = 1; lr <= lookupLastRow; lr++)
+                    {
+                        string key = lookupWs.Cell(lr, 1).GetString().Trim();
+                        if (string.IsNullOrEmpty(key)) continue;
+                        if (long.TryParse(lookupWs.Cell(lr, 2).GetString().Trim(), out long id))
+                        {
+                            if (!groupLookup.ContainsKey(key))
+                                groupLookup[key] = new List<ElementId>();
+                            groupLookup[key].Add(new ElementId(id));
+                        }
+                    }
+                }
+
                 // Process data rows
                 for (int row = DataStartRow; row <= lastRow; row++)
                 {
@@ -102,7 +121,17 @@ namespace BimTasksV2.Services
                     if (string.IsNullOrEmpty(elementIdsText))
                         continue;
 
-                    var elementIds = ParseElementIds(elementIdsText);
+                    // Resolve group key or parse IDs directly
+                    List<ElementId> elementIds;
+                    if (elementIdsText.StartsWith("__G") && elementIdsText.EndsWith("__") &&
+                        groupLookup.TryGetValue(elementIdsText, out var lookupIds))
+                    {
+                        elementIds = lookupIds;
+                    }
+                    else
+                    {
+                        elementIds = ParseElementIds(elementIdsText);
+                    }
                     if (elementIds.Count == 0) continue;
 
                     foreach (var kvp in colToField)
@@ -467,17 +496,15 @@ namespace BimTasksV2.Services
                 var ws = workbook.Worksheets.Add(safeSheet);
 
                 // --- Header row ---
-                var headerCell = ws.Cell(HeaderRow, ElementIdColumn);
-                headerCell.Value = ElementIdHeader;
-                ApplyHeaderStyle(headerCell, true);
+                ws.Cell(HeaderRow, ElementIdColumn).Value = ElementIdHeader;
 
                 foreach (var fi in fields)
-                {
-                    string displayName = fi.IsWritable ? fi.Name : fi.Name + " (read-only)";
-                    var cell = ws.Cell(HeaderRow, fi.ExcelColumn);
-                    cell.Value = displayName;
-                    ApplyHeaderStyle(cell, fi.IsWritable);
-                }
+                    ws.Cell(HeaderRow, fi.ExcelColumn).Value = fi.Name;
+
+                // --- Overflow IDs sheet (created only if needed) ---
+                const int MaxCellChars = 32000; // Excel limit is 32767, leave margin
+                IXLWorksheet? lookupSheet = null;
+                int lookupRow = 1;
 
                 // --- Data rows ---
                 for (int r = 0; r < rows.Count; r++)
@@ -486,68 +513,42 @@ namespace BimTasksV2.Services
                     var row = rows[r];
 
                     string idsText = string.Join(",", row.ElementIds.Select(id => id.Value));
-                    ws.Cell(excelRow, ElementIdColumn).Value = idsText;
+
+                    if (idsText.Length <= MaxCellChars)
+                    {
+                        ws.Cell(excelRow, ElementIdColumn).Value = idsText;
+                    }
+                    else
+                    {
+                        // Store a group key in main sheet, full IDs in lookup sheet
+                        string groupKey = $"__G{r}__";
+                        ws.Cell(excelRow, ElementIdColumn).Value = groupKey;
+
+                        if (lookupSheet == null)
+                        {
+                            lookupSheet = workbook.Worksheets.Add("__Lookup__");
+                            lookupSheet.Visibility = XLWorksheetVisibility.VeryHidden;
+                        }
+
+                        foreach (var id in row.ElementIds)
+                        {
+                            lookupSheet.Cell(lookupRow, 1).Value = groupKey;
+                            lookupSheet.Cell(lookupRow, 2).Value = id.Value;
+                            lookupRow++;
+                        }
+                    }
 
                     for (int f = 0; f < fields.Count; f++)
-                    {
-                        var cell = ws.Cell(excelRow, fields[f].ExcelColumn);
-                        cell.Value = row.Values[f] ?? "";
-
-                        if (!fields[f].IsWritable)
-                            ApplyReadOnlyStyle(cell);
-                        else
-                            ApplyNormalStyle(cell);
-                    }
+                        ws.Cell(excelRow, fields[f].ExcelColumn).Value = row.Values[f] ?? "";
                 }
 
-                // --- Column formatting ---
                 // Hide ElementIds column
                 ws.Column(ElementIdColumn).Hide();
-                ws.Column(ElementIdColumn).Width = 12;
-
-                // Auto-fit data columns with min/max bounds
-                for (int i = 0; i < fields.Count; i++)
-                {
-                    var col = ws.Column(fields[i].ExcelColumn);
-                    col.AdjustToContents();
-                    if (col.Width < 10) col.Width = 10;
-                    if (col.Width > 50) col.Width = 50;
-                }
-
-                // Freeze header row
-                ws.SheetView.FreezeRows(1);
 
                 workbook.SaveAs(filePath);
             }
         }
 
-        private static void ApplyHeaderStyle(IXLCell cell, bool isWritable)
-        {
-            cell.Style.Font.Bold = true;
-            cell.Style.Font.FontColor = XLColor.White;
-            cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            cell.Style.Border.SetOutsideBorder(XLBorderStyleValues.Thin);
-            cell.Style.Border.SetOutsideBorderColor(XLColor.FromArgb(0xD0, 0xD0, 0xD0));
-
-            if (isWritable)
-                cell.Style.Fill.BackgroundColor = XLColor.FromArgb(0x44, 0x72, 0xC4); // Blue
-            else
-                cell.Style.Fill.BackgroundColor = XLColor.FromArgb(0xE6, 0xE6, 0xE6); // Gray
-        }
-
-        private static void ApplyReadOnlyStyle(IXLCell cell)
-        {
-            cell.Style.Font.FontColor = XLColor.FromArgb(0x80, 0x80, 0x80);
-            cell.Style.Fill.BackgroundColor = XLColor.FromArgb(0xE6, 0xE6, 0xE6);
-            cell.Style.Border.SetOutsideBorder(XLBorderStyleValues.Thin);
-            cell.Style.Border.SetOutsideBorderColor(XLColor.FromArgb(0xD0, 0xD0, 0xD0));
-        }
-
-        private static void ApplyNormalStyle(IXLCell cell)
-        {
-            cell.Style.Border.SetOutsideBorder(XLBorderStyleValues.Thin);
-            cell.Style.Border.SetOutsideBorderColor(XLColor.FromArgb(0xD0, 0xD0, 0xD0));
-        }
 
         #endregion
 

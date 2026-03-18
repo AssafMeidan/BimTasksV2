@@ -240,8 +240,9 @@ namespace BimTasksV2.Infrastructure
             registry.RegisterSingleton<IDataExtractorService, DataExtractorService>();
             registry.RegisterSingleton<IValidationScheduleService, ValidationScheduleService>();
 
-            // Excel roundtrip service (singleton — holds cached schedule mappings)
+            // Excel services
             registry.RegisterSingleton<ScheduleExcelRoundtripService>();
+            registry.RegisterSingleton<ScheduleExportService>();
         }
 
         /// <summary>

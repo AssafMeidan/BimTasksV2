@@ -45,8 +45,8 @@ namespace BimTasksV2.Commands.Handlers
                 var dlg = new TaskDialog("Edit Schedule in Excel")
                 {
                     MainInstruction = "Schedule exported and opened in Excel.",
-                    MainContent = "Edit the writable columns (white background) in Excel.\n" +
-                                  "Read-only columns are grayed out.\n\n" +
+                    MainContent = "Edit the writable columns in Excel.\n" +
+                                  "The first (hidden) column contains element tracking data — do not modify it.\n\n" +
                                   "When done, SAVE the file and CLOSE Excel,\n" +
                                   "then click 'Import Changes' to apply edits to the model.",
                     CommonButtons = TaskDialogCommonButtons.Cancel,
