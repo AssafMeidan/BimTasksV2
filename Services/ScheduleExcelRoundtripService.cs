@@ -3,18 +3,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Autodesk.Revit.DB;
-using DocumentFormat.OpenXml;
-using DocumentFormat.OpenXml.Packaging;
-using DocumentFormat.OpenXml.Spreadsheet;
+using ClosedXML.Excel;
 using Serilog;
-using XlColor = DocumentFormat.OpenXml.Spreadsheet.Color;
-using XlFont = DocumentFormat.OpenXml.Spreadsheet.Font;
-using XlBorder = DocumentFormat.OpenXml.Spreadsheet.Border;
 
 namespace BimTasksV2.Services
 {
     /// <summary>
-    /// Exports Revit schedules to Excel and imports changes back using OpenXml.
+    /// Exports Revit schedules to Excel and imports changes back using ClosedXML.
     /// </summary>
     public class ScheduleExcelRoundtripService
     {
@@ -23,13 +18,6 @@ namespace BimTasksV2.Services
         private const int HeaderRow = 1;
         private const int DataStartRow = 2;
         private const string ElementIdHeader = "__ElementIds__";
-
-        // Style indices
-        private const uint STL_DEFAULT = 0;
-        private const uint STL_HEADER = 1;
-        private const uint STL_NORMAL = 2;
-        private const uint STL_READONLY = 3;
-        private const uint STL_HEADER_RO = 4;
 
         /// <summary>
         /// Metadata about a schedule field used during export/import.
@@ -76,45 +64,29 @@ namespace BimTasksV2.Services
             var fields = AnalyzeFields(doc, schedule);
             var affectedElementIds = new HashSet<ElementId>();
 
-            using (var spreadsheet = SpreadsheetDocument.Open(filePath, false))
+            using (var workbook = new XLWorkbook(filePath))
             {
-                var workbookPart = spreadsheet.WorkbookPart;
-                if (workbookPart == null)
-                {
-                    result.Errors.Add("Invalid Excel file: no workbook part found.");
-                    return result;
-                }
+                var ws = workbook.Worksheets.First();
+                int lastRow = ws.LastRowUsed()?.RowNumber() ?? 0;
+                int lastCol = ws.LastColumnUsed()?.ColumnNumber() ?? 0;
 
-                var sheet = workbookPart.Workbook.Descendants<Sheet>().First();
-                var worksheetPart = (WorksheetPart)workbookPart.GetPartById(sheet.Id!);
-                var sheetData = worksheetPart.Worksheet.Elements<SheetData>().First();
-                var sst = workbookPart.SharedStringTablePart?.SharedStringTable;
-
-                var allRows = sheetData.Elements<Row>().ToList();
-                if (allRows.Count < DataStartRow)
+                if (lastRow < DataStartRow)
                 {
                     Log.Warning("Excel file has no data rows");
                     return result;
                 }
 
                 // Build header-to-field mapping
-                var headerRowData = allRows.FirstOrDefault(r => r.RowIndex != null && r.RowIndex == (uint)HeaderRow);
                 var colToField = new Dictionary<int, FieldInfo>();
-                if (headerRowData != null)
+                for (int col = DataStartColumn; col <= lastCol; col++)
                 {
-                    foreach (var cell in headerRowData.Elements<Cell>())
-                    {
-                        int colIdx = GetColumnIndex(cell.CellReference);
-                        if (colIdx < DataStartColumn) continue;
+                    string header = ws.Cell(HeaderRow, col).GetString().Trim();
+                    if (header.EndsWith(" (read-only)"))
+                        header = header.Substring(0, header.Length - " (read-only)".Length);
 
-                        string? header = GetCellValue(cell, sst)?.Trim();
-                        if (header != null && header.EndsWith(" (read-only)"))
-                            header = header.Substring(0, header.Length - " (read-only)".Length);
-
-                        var field = fields.FirstOrDefault(f => f.Name == header);
-                        if (field != null && field.IsWritable)
-                            colToField[colIdx] = field;
-                    }
+                    var field = fields.FirstOrDefault(f => f.Name == header);
+                    if (field != null && field.IsWritable)
+                        colToField[col] = field;
                 }
 
                 if (colToField.Count == 0)
@@ -124,28 +96,20 @@ namespace BimTasksV2.Services
                 }
 
                 // Process data rows
-                foreach (var row in allRows.Where(r => r.RowIndex != null && r.RowIndex >= (uint)DataStartRow))
+                for (int row = DataStartRow; row <= lastRow; row++)
                 {
-                    var cellMap = new Dictionary<int, string>();
-                    foreach (var cell in row.Elements<Cell>())
-                    {
-                        int colIdx = GetColumnIndex(cell.CellReference);
-                        cellMap[colIdx] = GetCellValue(cell, sst) ?? "";
-                    }
-
-                    if (!cellMap.TryGetValue(ElementIdColumn, out string? elementIdsText) ||
-                        string.IsNullOrEmpty(elementIdsText?.Trim()))
+                    string elementIdsText = ws.Cell(row, ElementIdColumn).GetString().Trim();
+                    if (string.IsNullOrEmpty(elementIdsText))
                         continue;
 
-                    var elementIds = ParseElementIds(elementIdsText!);
+                    var elementIds = ParseElementIds(elementIdsText);
                     if (elementIds.Count == 0) continue;
 
                     foreach (var kvp in colToField)
                     {
                         int col = kvp.Key;
                         var fieldInfo = kvp.Value;
-                        cellMap.TryGetValue(col, out string? excelValue);
-                        excelValue = excelValue?.Trim() ?? "";
+                        string excelValue = ws.Cell(row, col).GetString().Trim();
 
                         foreach (var elemId in elementIds)
                         {
@@ -153,7 +117,7 @@ namespace BimTasksV2.Services
                             if (element == null)
                             {
                                 result.FailedCells++;
-                                result.Errors.Add($"Row {row.RowIndex}: Element {elemId.Value} not found");
+                                result.Errors.Add($"Row {row}: Element {elemId.Value} not found");
                                 continue;
                             }
 
@@ -173,7 +137,7 @@ namespace BimTasksV2.Services
                             catch (Exception ex)
                             {
                                 result.FailedCells++;
-                                result.Errors.Add($"Row {row.RowIndex}, '{fieldInfo.Name}', Element {elemId.Value}: {ex.Message}");
+                                result.Errors.Add($"Row {row}, '{fieldInfo.Name}', Element {elemId.Value}: {ex.Message}");
                             }
                         }
                     }
@@ -498,210 +462,91 @@ namespace BimTasksV2.Services
             if (safeSheet.Length > 31)
                 safeSheet = safeSheet.Substring(0, 31);
 
-            using (var spreadsheet = SpreadsheetDocument.Create(filePath, SpreadsheetDocumentType.Workbook))
+            using (var workbook = new XLWorkbook())
             {
-                var workbookPart = spreadsheet.AddWorkbookPart();
-                workbookPart.Workbook = new Workbook();
+                var ws = workbook.Worksheets.Add(safeSheet);
 
-                // Stylesheet
-                var stylesPart = workbookPart.AddNewPart<WorkbookStylesPart>();
-                stylesPart.Stylesheet = BuildRoundtripStylesheet();
-                stylesPart.Stylesheet.Save();
+                // --- Header row ---
+                var headerCell = ws.Cell(HeaderRow, ElementIdColumn);
+                headerCell.Value = ElementIdHeader;
+                ApplyHeaderStyle(headerCell, true);
 
-                // Worksheet
-                var worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
-                var worksheet = new Worksheet();
-
-                // Freeze header row
-                worksheet.Append(new SheetViews(
-                    new SheetView(
-                        new Pane
-                        {
-                            VerticalSplit = 1D,
-                            TopLeftCell = "A2",
-                            ActivePane = PaneValues.BottomLeft,
-                            State = PaneStateValues.Frozen
-                        },
-                        new Selection { Pane = PaneValues.BottomLeft }
-                    )
-                    {
-                        TabSelected = true,
-                        WorkbookViewId = 0U
-                    }
-                ));
-
-                // Column widths
-                var cols = new Columns();
-                cols.Append(new Column { Min = 1, Max = 1, Width = 12, Hidden = true, CustomWidth = true });
-                for (int i = 0; i < fields.Count; i++)
-                {
-                    double maxLen = fields[i].Name.Length;
-                    foreach (var row in rows)
-                    {
-                        if (i < row.Values.Count)
-                            maxLen = Math.Max(maxLen, (row.Values[i] ?? "").Length);
-                    }
-                    double width = Math.Max(10, Math.Min(50, maxLen * 1.2 + 2));
-                    uint colIdx = (uint)(DataStartColumn + i);
-                    cols.Append(new Column { Min = colIdx, Max = colIdx, Width = width, CustomWidth = true });
-                }
-                worksheet.Append(cols);
-
-                // Sheet data
-                var sheetData = new SheetData();
-
-                // Header row
-                var headerRow = new Row { RowIndex = (uint)HeaderRow };
-                headerRow.Append(MakeStringCell(HeaderRow, ElementIdColumn, ElementIdHeader, STL_HEADER));
                 foreach (var fi in fields)
                 {
                     string displayName = fi.IsWritable ? fi.Name : fi.Name + " (read-only)";
-                    uint style = fi.IsWritable ? STL_HEADER : STL_HEADER_RO;
-                    headerRow.Append(MakeStringCell(HeaderRow, fi.ExcelColumn, displayName, style));
+                    var cell = ws.Cell(HeaderRow, fi.ExcelColumn);
+                    cell.Value = displayName;
+                    ApplyHeaderStyle(cell, fi.IsWritable);
                 }
-                sheetData.Append(headerRow);
 
-                // Data rows
+                // --- Data rows ---
                 for (int r = 0; r < rows.Count; r++)
                 {
                     int excelRow = DataStartRow + r;
                     var row = rows[r];
-                    var dataRow = new Row { RowIndex = (uint)excelRow };
 
                     string idsText = string.Join(",", row.ElementIds.Select(id => id.Value));
-                    dataRow.Append(MakeStringCell(excelRow, ElementIdColumn, idsText, STL_DEFAULT));
+                    ws.Cell(excelRow, ElementIdColumn).Value = idsText;
 
                     for (int f = 0; f < fields.Count; f++)
                     {
-                        uint style = fields[f].IsWritable ? STL_NORMAL : STL_READONLY;
-                        dataRow.Append(MakeStringCell(excelRow, fields[f].ExcelColumn, row.Values[f], style));
-                    }
+                        var cell = ws.Cell(excelRow, fields[f].ExcelColumn);
+                        cell.Value = row.Values[f] ?? "";
 
-                    sheetData.Append(dataRow);
+                        if (!fields[f].IsWritable)
+                            ApplyReadOnlyStyle(cell);
+                        else
+                            ApplyNormalStyle(cell);
+                    }
                 }
 
-                worksheet.Append(sheetData);
+                // --- Column formatting ---
+                // Hide ElementIds column
+                ws.Column(ElementIdColumn).Hide();
+                ws.Column(ElementIdColumn).Width = 12;
 
-                worksheetPart.Worksheet = worksheet;
-                worksheetPart.Worksheet.Save();
-
-                workbookPart.Workbook.Append(new Sheets(
-                    new Sheet
-                    {
-                        Id = workbookPart.GetIdOfPart(worksheetPart),
-                        SheetId = 1U,
-                        Name = safeSheet
-                    }
-                ));
-
-                workbookPart.Workbook.Save();
-            }
-        }
-
-        #endregion
-
-        #region OpenXML Helpers
-
-        private static Stylesheet BuildRoundtripStylesheet()
-        {
-            var fonts = new Fonts(
-                new XlFont(new FontSize { Val = 10 }, new FontName { Val = "Calibri" }),
-                new XlFont(new Bold(), new FontSize { Val = 10 }, new XlColor { Rgb = "FFFFFFFF" },
-                    new FontName { Val = "Calibri" }),
-                new XlFont(new FontSize { Val = 10 }, new XlColor { Rgb = "FF808080" },
-                    new FontName { Val = "Calibri" })
-            ) { Count = 3 };
-
-            var fills = new Fills(
-                new Fill(new PatternFill { PatternType = PatternValues.None }),
-                new Fill(new PatternFill { PatternType = PatternValues.Gray125 }),
-                new Fill(new PatternFill(new ForegroundColor { Rgb = "FF4472C4" }) { PatternType = PatternValues.Solid }),
-                new Fill(new PatternFill(new ForegroundColor { Rgb = "FFE6E6E6" }) { PatternType = PatternValues.Solid })
-            ) { Count = 4 };
-
-            var borders = new Borders(
-                new XlBorder(new LeftBorder(), new RightBorder(), new TopBorder(), new BottomBorder(), new DiagonalBorder()),
-                new XlBorder(
-                    new LeftBorder(new XlColor { Rgb = "FFD0D0D0" }) { Style = BorderStyleValues.Thin },
-                    new RightBorder(new XlColor { Rgb = "FFD0D0D0" }) { Style = BorderStyleValues.Thin },
-                    new TopBorder(new XlColor { Rgb = "FFD0D0D0" }) { Style = BorderStyleValues.Thin },
-                    new BottomBorder(new XlColor { Rgb = "FFD0D0D0" }) { Style = BorderStyleValues.Thin },
-                    new DiagonalBorder())
-            ) { Count = 2 };
-
-            var cellFormats = new CellFormats(
-                new CellFormat(),
-                new CellFormat
+                // Auto-fit data columns with min/max bounds
+                for (int i = 0; i < fields.Count; i++)
                 {
-                    FontId = 1, FillId = 2, BorderId = 1,
-                    ApplyFont = true, ApplyFill = true, ApplyBorder = true,
-                    ApplyAlignment = true,
-                    Alignment = new Alignment { Horizontal = HorizontalAlignmentValues.Center }
-                },
-                new CellFormat { FontId = 0, FillId = 0, BorderId = 1, ApplyFont = true, ApplyBorder = true },
-                new CellFormat { FontId = 2, FillId = 3, BorderId = 1, ApplyFont = true, ApplyFill = true, ApplyBorder = true },
-                new CellFormat
-                {
-                    FontId = 1, FillId = 3, BorderId = 1,
-                    ApplyFont = true, ApplyFill = true, ApplyBorder = true,
-                    ApplyAlignment = true,
-                    Alignment = new Alignment { Horizontal = HorizontalAlignmentValues.Center }
+                    var col = ws.Column(fields[i].ExcelColumn);
+                    col.AdjustToContents();
+                    if (col.Width < 10) col.Width = 10;
+                    if (col.Width > 50) col.Width = 50;
                 }
-            ) { Count = 5 };
 
-            return new Stylesheet(fonts, fills, borders, cellFormats);
-        }
+                // Freeze header row
+                ws.SheetView.FreezeRows(1);
 
-        private static Cell MakeStringCell(int row, int col, string value, uint styleIndex)
-        {
-            return new Cell
-            {
-                CellReference = $"{ColLetter(col)}{row}",
-                DataType = CellValues.InlineString,
-                StyleIndex = styleIndex,
-                InlineString = new InlineString(new Text(value ?? "") { Space = SpaceProcessingModeValues.Preserve })
-            };
-        }
-
-        private static string ColLetter(int col)
-        {
-            string result = "";
-            while (col > 0)
-            {
-                col--;
-                result = (char)('A' + col % 26) + result;
-                col /= 26;
+                workbook.SaveAs(filePath);
             }
-            return result;
         }
 
-        private static int GetColumnIndex(string? cellReference)
+        private static void ApplyHeaderStyle(IXLCell cell, bool isWritable)
         {
-            if (string.IsNullOrEmpty(cellReference)) return 0;
-            int index = 0;
-            foreach (char c in cellReference)
-            {
-                if (!char.IsLetter(c)) break;
-                index = index * 26 + (char.ToUpper(c) - 'A' + 1);
-            }
-            return index;
+            cell.Style.Font.Bold = true;
+            cell.Style.Font.FontColor = XLColor.White;
+            cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            cell.Style.Border.SetOutsideBorder(XLBorderStyleValues.Thin);
+            cell.Style.Border.SetOutsideBorderColor(XLColor.FromArgb(0xD0, 0xD0, 0xD0));
+
+            if (isWritable)
+                cell.Style.Fill.BackgroundColor = XLColor.FromArgb(0x44, 0x72, 0xC4); // Blue
+            else
+                cell.Style.Fill.BackgroundColor = XLColor.FromArgb(0xE6, 0xE6, 0xE6); // Gray
         }
 
-        private static string GetCellValue(Cell cell, SharedStringTable? sst)
+        private static void ApplyReadOnlyStyle(IXLCell cell)
         {
-            if (cell == null) return "";
+            cell.Style.Font.FontColor = XLColor.FromArgb(0x80, 0x80, 0x80);
+            cell.Style.Fill.BackgroundColor = XLColor.FromArgb(0xE6, 0xE6, 0xE6);
+            cell.Style.Border.SetOutsideBorder(XLBorderStyleValues.Thin);
+            cell.Style.Border.SetOutsideBorderColor(XLColor.FromArgb(0xD0, 0xD0, 0xD0));
+        }
 
-            if (cell.DataType != null && cell.DataType.Value == CellValues.InlineString)
-                return cell.InlineString?.InnerText ?? "";
-
-            if (cell.DataType != null && cell.DataType.Value == CellValues.SharedString)
-            {
-                if (cell.CellValue != null && int.TryParse(cell.CellValue.InnerText, out int idx) && sst != null)
-                    return sst.ElementAt(idx).InnerText;
-                return "";
-            }
-
-            return cell.CellValue?.InnerText ?? "";
+        private static void ApplyNormalStyle(IXLCell cell)
+        {
+            cell.Style.Border.SetOutsideBorder(XLBorderStyleValues.Thin);
+            cell.Style.Border.SetOutsideBorderColor(XLColor.FromArgb(0xD0, 0xD0, 0xD0));
         }
 
         #endregion

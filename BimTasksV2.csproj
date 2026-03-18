@@ -17,6 +17,7 @@
     <Page Include="App.xaml" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.105.0" />
     <Reference Include="RevitAPI">
       <HintPath>$(RevitApiPath)\RevitAPI.dll</HintPath>
       <Private>false</Private>
@@ -25,8 +26,7 @@
       <HintPath>$(RevitApiPath)\RevitAPIUI.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <PackageReference Include="DocumentFormat.OpenXml" Version="3.1.*" />
-    <PackageReference Include="EPPlus" Version="7.5.*" />
+    <PackageReference Include="ClosedXML" Version="0.105.*" />
     <PackageReference Include="NAudio" Version="2.*" />
     <PackageReference Include="Prism.Unity" Version="9.0.*" />
     <PackageReference Include="Vosk" Version="0.3.*" />
@@ -53,16 +53,10 @@
       <DeployFiles Include="$(OutputPath)**\*.*" />
       <VoskFiles Include="VoskModel\**\*.*" Exclude="VoskModel\*.zip" />
     </ItemGroup>
-    <Copy SourceFiles="@(DeployFiles)"
-          DestinationFolder="$(RevitAddinDir)\%(RecursiveDir)"
-          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(DeployFiles)" DestinationFolder="$(RevitAddinDir)\%(RecursiveDir)" SkipUnchangedFiles="true" />
     <!-- Copy VoskModel to plugin directory -->
-    <Copy SourceFiles="@(VoskFiles)"
-          DestinationFolder="$(RevitAddinDir)\VoskModel\%(RecursiveDir)"
-          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(VoskFiles)" DestinationFolder="$(RevitAddinDir)\VoskModel\%(RecursiveDir)" SkipUnchangedFiles="true" />
     <!-- Copy .addin manifest to Revit 2025 addins root -->
-    <Copy SourceFiles="BimTasksV2.addin"
-          DestinationFolder="$(RevitAddinsRoot)"
-          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="BimTasksV2.addin" DestinationFolder="$(RevitAddinsRoot)" SkipUnchangedFiles="true" />
   </Target>
 </Project>

@@ -7,7 +7,7 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using BimTasksV2.Commands.Infrastructure;
 using Microsoft.Win32;
-using OfficeOpenXml;
+using ClosedXML.Excel;
 using Serilog;
 
 namespace BimTasksV2.Commands.Handlers
@@ -382,34 +382,36 @@ namespace BimTasksV2.Commands.Handlers
                 }
 
                 using (var stream = new MemoryStream(fileBytes))
-                using (var package = new ExcelPackage(stream))
+                using (var workbook = new XLWorkbook(stream))
                 {
-                    if (package.Workbook.Worksheets.Count == 0)
+                    if (workbook.Worksheets.Count == 0)
                     {
                         errors.Add("Excel file has no worksheets");
                         return (list, errors);
                     }
 
-                    var ws = package.Workbook.Worksheets[0];
-                    if (ws.Dimension == null)
+                    var ws = workbook.Worksheets.First();
+                    int lastRow = ws.LastRowUsed()?.RowNumber() ?? 0;
+                    int lastCol = ws.LastColumnUsed()?.ColumnNumber() ?? 0;
+
+                    if (lastRow < 2)
                     {
                         errors.Add($"Worksheet '{ws.Name}' appears to be empty");
                         return (list, errors);
                     }
 
-                    int maxRow = ws.Dimension.End.Row;
-                    if (ws.Dimension.End.Column < 5)
+                    if (lastCol < 5)
                     {
-                        errors.Add($"Expected at least 5 columns, found {ws.Dimension.End.Column}");
+                        errors.Add($"Expected at least 5 columns, found {lastCol}");
                         return (list, errors);
                     }
 
                     int row = 2;
                     int emptyRowCount = 0;
 
-                    while (row <= maxRow && row <= MaxExcelRows)
+                    while (row <= lastRow && row <= MaxExcelRows)
                     {
-                        var keyName = ws.Cells[row, 1].Text?.Trim() ?? "";
+                        var keyName = ws.Cell(row, 1).GetString().Trim();
                         if (string.IsNullOrWhiteSpace(keyName))
                         {
                             emptyRowCount++;
@@ -420,10 +422,10 @@ namespace BimTasksV2.Commands.Handlers
 
                         emptyRowCount = 0;
 
-                        var itemNum = ws.Cells[row, 2].Text?.Trim() ?? "";
-                        var desc = ws.Cells[row, 3].Text?.Trim() ?? "";
-                        var sub = ws.Cells[row, 5].Text?.Trim() ?? "";
-                        double price = ParsePriceCell(ws.Cells[row, 4]);
+                        var itemNum = ws.Cell(row, 2).GetString().Trim();
+                        var desc = ws.Cell(row, 3).GetString().Trim();
+                        var sub = ws.Cell(row, 5).GetString().Trim();
+                        double price = ParsePriceCell(ws.Cell(row, 4));
 
                         list.Add(new KeyEntry
                         {
@@ -447,16 +449,14 @@ namespace BimTasksV2.Commands.Handlers
             return (list, errors);
         }
 
-        private double ParsePriceCell(ExcelRange cell)
+        private double ParsePriceCell(IXLCell cell)
         {
-            if (cell.Value == null) return 0;
-            if (cell.Value is double d) return d;
-            if (cell.Value is int i) return i;
-            if (cell.Value is long l) return l;
-            if (cell.Value is decimal dec) return (double)dec;
-            if (cell.Value is float f) return f;
+            if (cell.IsEmpty()) return 0;
 
-            string text = cell.Text?.Trim() ?? "";
+            if (cell.DataType == XLDataType.Number)
+                return cell.GetDouble();
+
+            string text = cell.GetString().Trim();
             if (string.IsNullOrWhiteSpace(text)) return 0;
 
             text = text

@@ -6,7 +6,7 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using BimTasksV2.Commands.Infrastructure;
 using Microsoft.Win32;
-using OfficeOpenXml;
+using ClosedXML.Excel;
 using Serilog;
 
 namespace BimTasksV2.Commands.Handlers
@@ -197,23 +197,23 @@ namespace BimTasksV2.Commands.Handlers
             {
                 byte[] fileBytes = File.ReadAllBytes(path);
                 using (var stream = new MemoryStream(fileBytes))
-                using (var package = new ExcelPackage(stream))
+                using (var workbook = new XLWorkbook(stream))
                 {
-                    if (package.Workbook.Worksheets.Count == 0) return list;
+                    if (workbook.Worksheets.Count == 0) return list;
 
-                    var ws = package.Workbook.Worksheets[0];
-                    if (ws.Dimension == null) return list;
+                    var ws = workbook.Worksheets.First();
+                    int lastRow = ws.LastRowUsed()?.RowNumber() ?? 0;
 
                     int row = 2;
-                    while (row <= ws.Dimension.End.Row)
+                    while (row <= lastRow)
                     {
-                        var keyName = ws.Cells[row, 1].Text?.Trim() ?? "";
+                        var keyName = ws.Cell(row, 1).GetString().Trim();
                         if (string.IsNullOrWhiteSpace(keyName)) break;
 
-                        var itemNum = ws.Cells[row, 2].Text?.Trim() ?? "";
-                        var desc = ws.Cells[row, 3].Text?.Trim() ?? "";
-                        var priceText = ws.Cells[row, 4].Text?.Trim() ?? "";
-                        var sub = ws.Cells[row, 5].Text?.Trim() ?? "";
+                        var itemNum = ws.Cell(row, 2).GetString().Trim();
+                        var desc = ws.Cell(row, 3).GetString().Trim();
+                        var priceText = ws.Cell(row, 4).GetString().Trim();
+                        var sub = ws.Cell(row, 5).GetString().Trim();
 
                         double.TryParse(priceText, out double price);
 

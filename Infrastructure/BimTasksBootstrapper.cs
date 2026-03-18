@@ -3,7 +3,6 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using OfficeOpenXml;
 using Prism.Events;
 using Prism.Ioc;
 using Prism.Mvvm;
@@ -52,9 +51,6 @@ namespace BimTasksV2.Infrastructure
             SerilogConfig.Initialize();
             SerilogTraceListener.Register();
             Log.Information("BimTasksBootstrapper.Initialize() starting...");
-
-            // Set EPPlus license (must happen before any EPPlus usage)
-            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
 
             // Create Prism 9 Unity container
             _container = new UnityContainerExtension();
@@ -260,6 +256,7 @@ namespace BimTasksV2.Infrastructure
             registry.RegisterForNavigation<Views.UniformatWindowView>();
             registry.RegisterForNavigation<Views.CopyCategoryFromLinkView>();
             registry.RegisterForNavigation<Views.FixSplitCornersView>();
+            registry.RegisterForNavigation<Views.ColorCodeByParameterView>();
         }
 
         #endregion Registration Helpers
