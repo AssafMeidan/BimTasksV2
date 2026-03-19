@@ -85,7 +85,11 @@ namespace BimTasksV2.Ribbon
             {
                 var btn = panel.AddItem(data) as PushButton;
                 if (btn != null)
+                {
                     ApplyIcon(btn, def.Name);
+                    if (!string.IsNullOrEmpty(def.Tooltip))
+                        btn.ToolTip = def.Tooltip;
+                }
                 return btn;
             }
             catch (Exception)
@@ -121,7 +125,11 @@ namespace BimTasksV2.Ribbon
                     {
                         var pb = splitButton.AddPushButton(btnData);
                         if (pb != null)
+                        {
                             ApplyIcon(pb, member.Name);
+                            if (!string.IsNullOrEmpty(member.Tooltip))
+                                pb.ToolTip = member.Tooltip;
+                        }
                     }
                     catch (Exception)
                     {
