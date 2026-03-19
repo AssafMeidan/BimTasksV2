@@ -293,15 +293,15 @@ namespace BimTasksV2.ViewModels
                     AccentBrush = WallAccent,
                     Buttons = new ObservableCollection<ToolbarButtonInfo>
                     {
-                        Btn("ChangeWallHeight",                          "Height",     "Change wall height"),
-                        Btn("AdjustWallHeightToFloors",                  "To Floors",  "Adjust wall height to floors"),
-                        Btn("SetSelectedWindowAndDoorPhaseToWallPhase",  "Sync Phase", "Sync window/door phase to wall"),
-                        Btn("AddChipuyToWall",                           "Clad Both",  "Add cladding to both sides"),
-                        Btn("AddChipuyToExternalWall",                   "Clad Ext",   "Add external cladding"),
-                        Btn("AddChipuyToInternalWall",                   "Clad Int",   "Add internal cladding"),
-                        Btn("JoinAllConcreteWallsAndFloorsGeometry",     "Join W+F",   "Join walls and floors geometry"),
-                        Btn("JoinSelectedBeamsToBlockWalls",             "Join W+B",   "Join walls and beams geometry"),
-                        Btn("CopyLinkedWalls",                           "Copy Link",  "Copy walls from linked model"),
+                        Btn("ChangeWallHeight",                          "Height",     "Set a new height for selected walls"),
+                        Btn("AdjustWallHeightToFloors",                  "To Floors",  "Extend walls up or down to match the floors above and below"),
+                        Btn("SetSelectedWindowAndDoorPhaseToWallPhase",  "Sync Phase", "Set the phase of selected windows/doors to match their host wall"),
+                        Btn("AddChipuyToWall",                           "Clad Both",  "Split compound wall and add cladding layers to both sides"),
+                        Btn("AddChipuyToExternalWall",                   "Clad Ext",   "Split compound wall and add cladding to the exterior face"),
+                        Btn("AddChipuyToInternalWall",                   "Clad Int",   "Split compound wall and add cladding to the interior face"),
+                        Btn("JoinAllConcreteWallsAndFloorsGeometry",     "Join W+F",   "Join geometry between all concrete walls and floors for clean intersections"),
+                        Btn("JoinSelectedBeamsToBlockWalls",             "Join W+B",   "Join geometry of selected beams to adjacent block walls"),
+                        Btn("CopyLinkedWalls",                           "Copy Link",  "Copy walls from a linked Revit model into the current project"),
                     }
                 },
                 new ToolbarGroupInfo
@@ -310,8 +310,8 @@ namespace BimTasksV2.ViewModels
                     AccentBrush = StructAccent,
                     Buttons = new ObservableCollection<ToolbarButtonInfo>
                     {
-                        Btn("SetBeamsToGroundZero",   "Beams Z=0", "Set beams to ground zero"),
-                        Btn("AddClunasFromDwg",       "Piles DWG", "Create piles from DWG"),
+                        Btn("SetBeamsToGroundZero",   "Beams Z=0", "Move selected beams so their base offset is at ground zero"),
+                        Btn("AddClunasFromDwg",       "Piles DWG", "Create pile elements from point positions in a DWG file"),
                     }
                 },
                 new ToolbarGroupInfo
@@ -320,9 +320,9 @@ namespace BimTasksV2.ViewModels
                     AccentBrush = SchedAccent,
                     Buttons = new ObservableCollection<ToolbarButtonInfo>
                     {
-                        Btn("ExportScheduleToExcel",  "Export",     "Export schedule to Excel"),
-                        Btn("EditScheduleInExcel",    "Edit Excel", "Edit schedule in Excel roundtrip"),
-                        Btn("CalcAreaVolume",         "Calc A/V",   "Calculate area and volume"),
+                        Btn("ExportScheduleToExcel",  "Export",     "Export the active schedule to a styled Excel file"),
+                        Btn("EditScheduleInExcel",    "Edit Excel", "Open the active schedule in Excel for editing, then import changes back"),
+                        Btn("CalcAreaVolume",         "Calc A/V",   "Calculate and display area and volume totals for selected elements"),
                     }
                 },
                 new ToolbarGroupInfo
@@ -331,11 +331,11 @@ namespace BimTasksV2.ViewModels
                     AccentBrush = BoqAccent,
                     Buttons = new ObservableCollection<ToolbarButtonInfo>
                     {
-                        Btn("BOQSetup",            "Setup",      "BOQ setup configuration"),
-                        Btn("BOQCreateSchedules",  "Schedules",  "Create BOQ schedules"),
-                        Btn("BOQAutoFillQty",      "AutoFill",   "Auto-fill BOQ quantities"),
-                        Btn("BOQCalcEffUnitPrice", "Calc Price", "Calculate effective unit price"),
-                        Btn("CreateSeifeiChoze",   "Contract",   "Create contract sections"),
+                        Btn("BOQSetup",            "Setup",      "Configure BOQ parameters and Uniformat code mappings"),
+                        Btn("BOQCreateSchedules",  "Schedules",  "Generate BOQ schedule views from configured parameters"),
+                        Btn("BOQAutoFillQty",      "AutoFill",   "Automatically calculate and fill quantity values in BOQ schedules"),
+                        Btn("BOQCalcEffUnitPrice", "Calc Price", "Calculate effective unit prices for BOQ line items"),
+                        Btn("CreateSeifeiChoze",   "Contract",   "Generate contract section schedules from an Excel template"),
                     }
                 },
                 new ToolbarGroupInfo
@@ -344,10 +344,10 @@ namespace BimTasksV2.ViewModels
                     AccentBrush = ToolAccent,
                     Buttons = new ObservableCollection<ToolbarButtonInfo>
                     {
-                        Btn("FilterTree",            "Filter",   "Open filter tree"),
-                        Btn("CreateSelectedItem",    "Create",   "Create similar element"),
-                        Btn("CreateWindowFamilies",  "Windows",  "Create window families"),
-                        Btn("CopyCategoryFromLink",  "Copy Cat", "Copy category from link"),
+                        Btn("FilterTree",            "Filter",   "Open hierarchical element filter \u2014 filter by category, parameter, and value"),
+                        Btn("CreateSelectedItem",    "Create",   "Create a new element similar to the currently selected one"),
+                        Btn("CreateWindowFamilies",  "Windows",  "Generate parametric window families from specifications"),
+                        Btn("CopyCategoryFromLink",  "Copy Cat", "Copy elements of a specific category from a linked model"),
                     }
                 }
             };

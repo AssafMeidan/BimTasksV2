@@ -190,10 +190,20 @@
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <Button Style="{StaticResource ToolbarBtn}"
-                                                    ToolTip="{Binding Tooltip}"
                                                     Command="{Binding DataContext.ExecuteCommandCommand,
                                                               RelativeSource={RelativeSource AncestorType=Window}}"
                                                     CommandParameter="{Binding Key}">
+                                                <Button.ToolTip>
+                                                    <ToolTip MaxWidth="260">
+                                                        <StackPanel>
+                                                            <TextBlock Text="{Binding Label}" FontWeight="SemiBold"
+                                                                       FontSize="12" Foreground="#222"/>
+                                                            <TextBlock Text="{Binding Tooltip}" FontSize="11"
+                                                                       Foreground="#555" TextWrapping="Wrap"
+                                                                       Margin="0,2,0,0"/>
+                                                        </StackPanel>
+                                                    </ToolTip>
+                                                </Button.ToolTip>
                                                 <StackPanel Orientation="Horizontal">
                                                     <Image x:Name="iconImg" Source="{Binding Icon}"
                                                            Width="20" Height="20" Margin="0,0,4,0"
