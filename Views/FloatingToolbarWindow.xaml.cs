@@ -2,18 +2,31 @@ using System;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Shell;
 
 namespace BimTasksV2.Views
 {
     /// <summary>
-    /// Singleton floating toolbar window with custom chrome, opacity transitions,
-    /// and position persistence. Closing is intercepted — the window hides instead.
+    /// Singleton floating toolbar window with custom chrome, resize via WindowChrome,
+    /// opacity transitions, and position/size persistence.
+    /// Closing is intercepted — the window hides instead.
     /// </summary>
     public partial class FloatingToolbarWindow : Window
     {
         public FloatingToolbarWindow()
         {
             InitializeComponent();
+
+            // WindowChrome provides resize borders on the borderless transparent window
+            WindowChrome.SetWindowChrome(this, new WindowChrome
+            {
+                CaptionHeight = 0,
+                ResizeBorderThickness = new Thickness(8),
+                GlassFrameThickness = new Thickness(0),
+                CornerRadius = new CornerRadius(0),
+                UseAeroCaptionButtons = false
+            });
+
             DataContext = new ViewModels.FloatingToolbarViewModel();
 
             // Save state whenever the window becomes hidden
@@ -23,7 +36,7 @@ namespace BimTasksV2.Views
                     SaveCurrentState();
             };
 
-            // Listen for orientation changes to re-layout
+            // Listen for orientation changes to swap dimensions
             if (DataContext is ViewModels.FloatingToolbarViewModel vm)
                 vm.OrientationChanged += OnOrientationChanged;
         }
@@ -33,11 +46,17 @@ namespace BimTasksV2.Views
             if (DataContext is not ViewModels.FloatingToolbarViewModel vm)
                 return;
 
-            var (left, top) = vm.LoadSettings();
+            var (left, top, width, height) = vm.LoadSettings();
 
+            // Restore size
+            if (width.HasValue && width.Value > MinWidth)
+                Width = width.Value;
+            if (height.HasValue && height.Value > MinHeight)
+                Height = height.Value;
+
+            // Restore position (validate on-screen)
             if (left.HasValue && top.HasValue)
             {
-                // Validate position is within virtual screen bounds
                 double screenW = SystemParameters.VirtualScreenWidth;
                 double screenH = SystemParameters.VirtualScreenHeight;
                 double screenL = SystemParameters.VirtualScreenLeft;
@@ -71,6 +90,8 @@ namespace BimTasksV2.Views
 
         private void OnOrientationChanged()
         {
+            // Swap width and height for a natural orientation transition
+            (Width, Height) = (Height, Width);
             InvalidateMeasure();
             UpdateLayout();
         }
@@ -104,7 +125,7 @@ namespace BimTasksV2.Views
 
         private void SaveCurrentState()
         {
-            (DataContext as ViewModels.FloatingToolbarViewModel)?.SaveSettings(Left, Top);
+            (DataContext as ViewModels.FloatingToolbarViewModel)?.SaveSettings(Left, Top, Width, Height);
         }
     }
 }

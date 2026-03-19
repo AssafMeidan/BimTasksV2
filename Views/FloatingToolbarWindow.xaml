@@ -4,12 +4,13 @@
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
-        SizeToContent="WidthAndHeight"
         Topmost="True"
         ShowInTaskbar="False"
-        ResizeMode="NoResize"
-        MaxWidth="1200"
-        MaxHeight="800"
+        ResizeMode="CanResize"
+        MinWidth="130"
+        MinHeight="80"
+        Width="480"
+        Height="220"
         Closing="Window_Closing"
         Loaded="Window_Loaded">
 
@@ -148,8 +149,8 @@
                 <ItemsControl ItemsSource="{Binding Groups}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <StackPanel Orientation="{Binding DataContext.GroupsOrientation,
-                                        RelativeSource={RelativeSource AncestorType=Window}}"/>
+                            <WrapPanel Orientation="{Binding DataContext.GroupsOrientation,
+                                       RelativeSource={RelativeSource AncestorType=Window}}"/>
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
@@ -183,8 +184,8 @@
                                                            Converter={StaticResource BoolToVis}}">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
-                                            <StackPanel Orientation="{Binding DataContext.ButtonsOrientation,
-                                                        RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                            <WrapPanel Orientation="{Binding DataContext.ButtonsOrientation,
+                                                       RelativeSource={RelativeSource AncestorType=Window}}"/>
                                         </ItemsPanelTemplate>
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
@@ -226,6 +227,14 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
             </ScrollViewer>
+
+            <!-- Resize grip indicator (bottom-right corner) -->
+            <Canvas Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                    Width="12" Height="12" Margin="0,0,2,2" IsHitTestVisible="False">
+                <Line X1="11" Y1="3" X2="3" Y2="11" Stroke="#CCC" StrokeThickness="1"/>
+                <Line X1="11" Y1="6" X2="6" Y2="11" Stroke="#CCC" StrokeThickness="1"/>
+                <Line X1="11" Y1="9" X2="9" Y2="11" Stroke="#CCC" StrokeThickness="1"/>
+            </Canvas>
         </Grid>
     </Border>
 </Window>

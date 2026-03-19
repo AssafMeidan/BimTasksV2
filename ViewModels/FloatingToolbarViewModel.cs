@@ -69,8 +69,9 @@ namespace BimTasksV2.ViewModels
         public Orientation GroupsOrientation => _isVertical ? Orientation.Vertical : Orientation.Horizontal;
         public Orientation ButtonsOrientation => _isVertical ? Orientation.Vertical : Orientation.Horizontal;
         public string OrientationIcon => _isVertical ? "\u2194" : "\u2195";
-        public ScrollBarVisibility HScrollVisibility => _isVertical ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto;
-        public ScrollBarVisibility VScrollVisibility => _isVertical ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
+        // WrapPanel wraps in the primary direction, so scrolling is needed in the cross direction
+        public ScrollBarVisibility HScrollVisibility => _isVertical ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
+        public ScrollBarVisibility VScrollVisibility => _isVertical ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto;
 
         public ObservableCollection<ToolbarGroupInfo> Groups { get; }
         public DelegateCommand<string> ExecuteCommandCommand { get; }
@@ -191,7 +192,7 @@ namespace BimTasksV2.ViewModels
 
         #region Settings Persistence
 
-        public void SaveSettings(double left, double top)
+        public void SaveSettings(double left, double top, double width, double height)
         {
             try
             {
@@ -199,6 +200,8 @@ namespace BimTasksV2.ViewModels
                 {
                     Left = left,
                     Top = top,
+                    Width = width,
+                    Height = height,
                     IsVertical = _isVertical,
                     CollapsedGroups = Groups.Where(g => !g.IsExpanded).Select(g => g.Name).ToArray()
                 };
@@ -213,17 +216,17 @@ namespace BimTasksV2.ViewModels
             }
         }
 
-        public (double? left, double? top) LoadSettings()
+        public (double? left, double? top, double? width, double? height) LoadSettings()
         {
             try
             {
                 if (!File.Exists(SettingsPath))
-                    return (null, null);
+                    return (null, null, null, null);
 
                 var json = File.ReadAllText(SettingsPath);
                 var settings = JsonSerializer.Deserialize<ToolbarSettings>(json);
                 if (settings == null)
-                    return (null, null);
+                    return (null, null, null, null);
 
                 IsVertical = settings.IsVertical;
 
@@ -231,12 +234,12 @@ namespace BimTasksV2.ViewModels
                 foreach (var group in Groups)
                     group.IsExpanded = !collapsed.Contains(group.Name);
 
-                return (settings.Left, settings.Top);
+                return (settings.Left, settings.Top, settings.Width, settings.Height);
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "[Toolbar] Failed to load settings");
-                return (null, null);
+                return (null, null, null, null);
             }
         }
 
@@ -244,6 +247,8 @@ namespace BimTasksV2.ViewModels
         {
             public double? Left { get; set; }
             public double? Top { get; set; }
+            public double? Width { get; set; }
+            public double? Height { get; set; }
             public bool IsVertical { get; set; }
             public string[] CollapsedGroups { get; set; } = Array.Empty<string>();
         }
