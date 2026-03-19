@@ -51,6 +51,7 @@ namespace BimTasksV2.Ribbon
             ["btnAddChipuyExternal"]    = (WallBg, dc => { DrawCladding(dc); Label(dc, "E", 22); }),
             ["btnAddChipuyInternal"]    = (WallBg, dc => { DrawCladding(dc); Label(dc, "I", 23); }),
             ["btnCreateWindowFamilies"] = (WallBg, DrawWindow),
+            ["btnJoinBeamsToBlockWalls"]= (WallBg, DrawJoinGeom),
             // Structure (amber)
             ["btnSetBeamsToGround"]        = (StructBg, DrawBeamDown),
             ["btnJoinConcreteWallsFloors"] = (StructBg, DrawJoinGeom),

@@ -109,6 +109,9 @@ namespace BimTasksV2.Infrastructure
                     DestructibleRegionBehavior.BehaviorKey);
             }
 
+            // Eagerly create toolbar service so it subscribes to toggle events
+            _container.Resolve<FloatingToolbarService>();
+
             Log.Information("BimTasksBootstrapper.Initialize() completed successfully.");
         }
 
@@ -243,6 +246,9 @@ namespace BimTasksV2.Infrastructure
             // Excel services
             registry.RegisterSingleton<ScheduleExcelRoundtripService>();
             registry.RegisterSingleton<ScheduleExportService>();
+
+            // Floating toolbar service
+            registry.RegisterSingleton<FloatingToolbarService>();
         }
 
         /// <summary>
