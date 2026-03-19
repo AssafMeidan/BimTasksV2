@@ -115,6 +115,12 @@ namespace BimTasksV2.Ribbon
                 "Split\nFloor",
                 "BimTasksV2.Commands.Proxies.SplitFloorCommand",
                 "Split a compound floor into individual layer floors"),
+
+            new ButtonDef(
+                "btnJoinColumnsFramesToWalls",
+                "Join Col\n& Frames",
+                "BimTasksV2.Commands.Proxies.JoinColumnsAndFramesToWallsCommand",
+                "Join selected columns and structural framing to intersecting walls"),
         };
 
         // =====================================================================

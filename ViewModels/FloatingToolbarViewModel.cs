@@ -108,6 +108,7 @@ namespace BimTasksV2.ViewModels
             ["CreateSelectedItem"] = "btnCreateSelectedItem",
             ["CreateWindowFamilies"] = "btnCreateWindowFamilies",
             ["CopyCategoryFromLink"] = "btnCopyCategoryFromLink",
+            ["JoinColumnsAndFramesToWalls"] = "btnJoinColumnsFramesToWalls",
         };
 
         // Settings persistence
@@ -312,6 +313,7 @@ namespace BimTasksV2.ViewModels
                     {
                         Btn("SetBeamsToGroundZero",   "Beams Z=0", "Move selected beams so their base offset is at ground zero"),
                         Btn("AddClunasFromDwg",       "Piles DWG", "Create pile elements from point positions in a DWG file"),
+                        Btn("JoinColumnsAndFramesToWalls", "Join C+F", "Join selected columns and structural framing to intersecting walls"),
                     }
                 },
                 new ToolbarGroupInfo

@@ -56,6 +56,7 @@ namespace BimTasksV2.Ribbon
             ["btnSetBeamsToGround"]        = (StructBg, DrawBeamDown),
             ["btnJoinConcreteWallsFloors"] = (StructBg, DrawJoinGeom),
             ["btnSplitFloor"]             = (StructBg, DrawSplitFloor),
+            ["btnJoinColumnsFramesToWalls"]= (StructBg, DrawJoinColFrame),
             // Schedules (green)
             ["btnExportScheduleToExcel"]   = (SchedBg, DrawExportGrid),
             ["btnEditScheduleInExcel"]     = (SchedBg, DrawEditGrid),
@@ -229,6 +230,14 @@ namespace BimTasksV2.Ribbon
             dc.DrawRectangle(White, null, new Rect(8, 7, 4, 18));
             dc.DrawRectangle(White, null, new Rect(8, 21, 16, 4));
             dc.DrawEllipse(null, Thick, new Point(12, 21), 3, 3);
+        }
+
+        private static void DrawJoinColFrame(DrawingContext dc)
+        {
+            // Vertical column crossing a horizontal wall with join indicator
+            dc.DrawRectangle(White, null, new Rect(13, 6, 5, 20));   // column (vertical)
+            dc.DrawRectangle(null, Thick, new Rect(6, 14, 20, 5));   // wall (horizontal)
+            dc.DrawEllipse(null, Thick, new Point(15, 16), 3, 3);    // join circle
         }
 
         private static void DrawSplitFloor(DrawingContext dc)

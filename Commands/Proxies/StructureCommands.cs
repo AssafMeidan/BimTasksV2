@@ -13,4 +13,8 @@ namespace BimTasksV2.Commands.Proxies
     [Transaction(TransactionMode.Manual)]
     public class SplitFloorCommand : Infrastructure.ProxyCommand
     { protected override string HandlerTypeName => "SplitFloorHandler"; }
+
+    [Transaction(TransactionMode.Manual)]
+    public class JoinColumnsAndFramesToWallsCommand : Infrastructure.ProxyCommand
+    { protected override string HandlerTypeName => "JoinColumnsAndFramesToWallsHandler"; }
 }
