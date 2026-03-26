@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Autodesk.Revit.DB;
@@ -12,7 +13,8 @@ using Serilog;
 namespace BimTasksV2.Commands.Handlers
 {
     /// <summary>
-    /// Shows a SchedulePicker, exports the selected schedule to Excel using ScheduleExcelRoundtripService.
+    /// Shows a multi-select SchedulePicker and exports selected schedules
+    /// to one or multiple professionally formatted Excel files.
     /// </summary>
     public class ExportScheduleToExcelHandler : ICommandHandler
     {
@@ -23,33 +25,42 @@ namespace BimTasksV2.Commands.Handlers
 
             try
             {
-                // Get schedule: active view or picker
-                ViewSchedule? schedule = GetSchedule(doc, uidoc);
-                if (schedule == null) return;
+                var schedules = new FilteredElementCollector(doc)
+                    .OfClass(typeof(ViewSchedule))
+                    .Cast<ViewSchedule>()
+                    .Where(s => !s.IsTitleblockRevisionSchedule &&
+                                !s.IsInternalKeynoteSchedule &&
+                                !s.Definition.IsKeySchedule &&
+                                !s.Name.StartsWith("<"))
+                    .ToList();
 
-                // Get save location
-                var saveDialog = new SaveFileDialog
+                if (schedules.Count == 0)
                 {
-                    Filter = "Excel Files (*.xlsx)|*.xlsx",
-                    Title = "Export Schedule to Excel",
-                    FileName = $"{schedule.Name}.xlsx"
-                };
+                    TaskDialog.Show("BimTasksV2", "The project contains no schedules.");
+                    return;
+                }
 
-                if (saveDialog.ShowDialog() != true)
+                var picker = new Views.SchedulePickerWindow(
+                    schedules,
+                    title: "Export Schedule to Excel",
+                    instruction: "Select schedules (Ctrl+Click for multiple):",
+                    multiSelect: true);
+
+                if (picker.ShowDialog() != true || picker.SelectedSchedules.Count == 0)
                     return;
 
-                string filePath = saveDialog.FileName;
-
-                // Export
+                var selected = picker.SelectedSchedules;
                 var container = BimTasksV2.Infrastructure.ContainerLocator.Container;
-                var service = container.Resolve<ScheduleExportService>();
-                service.ExportScheduleToExcel(schedule, filePath);
+                var service = container.Resolve<ScheduleExcelExportService>();
 
-                TaskDialog.Show("BimTasksV2",
-                    $"Schedule '{schedule.Name}' exported successfully.\n\n{filePath}");
-
-                Log.Information("ExportScheduleToExcel: Exported '{Name}' to {Path}",
-                    schedule.Name, filePath);
+                if (picker.ExportAsSingleFile)
+                {
+                    ExportAsSingleFile(service, selected);
+                }
+                else
+                {
+                    ExportAsSeparateFiles(service, selected);
+                }
             }
             catch (Exception ex)
             {
@@ -58,35 +69,74 @@ namespace BimTasksV2.Commands.Handlers
             }
         }
 
-        private ViewSchedule? GetSchedule(Document doc, UIDocument uidoc)
+        private void ExportAsSingleFile(ScheduleExcelExportService service, List<ViewSchedule> selected)
         {
-            // If active view is a schedule, use it
-            if (uidoc.ActiveView is ViewSchedule activeSchedule &&
-                !activeSchedule.IsTitleblockRevisionSchedule &&
-                !activeSchedule.IsInternalKeynoteSchedule)
+            string defaultName = selected.Count == 1
+                ? $"{SafeName(selected[0].Name)}_{DateTime.Now:yyyyMMdd}.xlsx"
+                : $"Schedules_{DateTime.Now:yyyyMMdd}.xlsx";
+
+            var saveDialog = new SaveFileDialog
             {
-                return activeSchedule;
+                Filter = "Excel Files (*.xlsx)|*.xlsx",
+                Title = "Save Schedules as Excel",
+                FileName = defaultName
+            };
+
+            if (saveDialog.ShowDialog() != true)
+                return;
+
+            service.ExportSchedulesToExcel(selected, saveDialog.FileName);
+
+            string names = string.Join(", ", selected.Select(s => s.Name));
+            TaskDialog.Show("Export Complete",
+                $"Exported {selected.Count} schedule(s) to:\n{saveDialog.FileName}");
+
+            Log.Information("ExportScheduleToExcel: Exported {Count} schedules to {Path}",
+                selected.Count, saveDialog.FileName);
+        }
+
+        private void ExportAsSeparateFiles(ScheduleExcelExportService service, List<ViewSchedule> selected)
+        {
+            // Ask for a folder
+            using var folderDialog = new System.Windows.Forms.FolderBrowserDialog
+            {
+                Description = "Select folder for exported Excel files",
+                UseDescriptionForTitle = true
+            };
+
+            if (folderDialog.ShowDialog() != System.Windows.Forms.DialogResult.OK)
+                return;
+
+            string folder = folderDialog.SelectedPath;
+            int exported = 0;
+
+            foreach (var schedule in selected)
+            {
+                string fileName = $"{SafeName(schedule.Name)}_{DateTime.Now:yyyyMMdd}.xlsx";
+                string filePath = Path.Combine(folder, fileName);
+
+                try
+                {
+                    service.ExportScheduleToExcel(schedule, filePath);
+                    exported++;
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "Failed to export schedule '{Name}'", schedule.Name);
+                }
             }
 
-            // Otherwise show picker
-            var schedules = new FilteredElementCollector(doc)
-                .OfClass(typeof(ViewSchedule))
-                .Cast<ViewSchedule>()
-                .Where(s => !s.IsTitleblockRevisionSchedule &&
-                            !s.IsInternalKeynoteSchedule &&
-                            !s.Definition.IsKeySchedule &&
-                            !s.Name.StartsWith("<"))
-                .ToList();
+            TaskDialog.Show("Export Complete",
+                $"Exported {exported} of {selected.Count} schedule(s) to:\n{folder}");
 
-            if (schedules.Count == 0)
-            {
-                TaskDialog.Show("BimTasksV2", "The project contains no schedules.");
-                return null;
-            }
+            Log.Information("ExportScheduleToExcel: Exported {Exported}/{Total} schedules to {Folder}",
+                exported, selected.Count, folder);
+        }
 
-            var picker = new Views.SchedulePickerWindow(schedules);
-            picker.ShowDialog();
-            return picker.SelectedSchedule;
+        private static string SafeName(string name)
+        {
+            return string.Join("_",
+                name.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
         }
     }
 }

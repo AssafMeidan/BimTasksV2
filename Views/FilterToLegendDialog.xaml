@@ -1,0 +1,132 @@
+<Window x:Class="BimTasksV2.Views.FilterToLegendDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Filter to Legend Drafting"
+        Width="460" Height="480"
+        MinWidth="360" MinHeight="380"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResizeWithGrip"
+        ShowInTaskbar="False">
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Mode: Create New / Update Existing -->
+        <GroupBox Grid.Row="0" Header="Legend Target" Margin="0,0,0,8">
+            <StackPanel Margin="4">
+                <RadioButton x:Name="CreateNewRadio"
+                             Content="Create new legend"
+                             GroupName="LegendMode"
+                             IsChecked="True"
+                             Margin="0,2"
+                             Checked="LegendMode_Changed"/>
+                <StackPanel Orientation="Horizontal" Margin="0,2">
+                    <RadioButton x:Name="UpdateExistingRadio"
+                                 Content="Update existing:"
+                                 GroupName="LegendMode"
+                                 VerticalAlignment="Center"
+                                 Margin="0,0,8,0"
+                                 Checked="LegendMode_Changed"/>
+                    <ComboBox x:Name="ExistingLegendsCombo"
+                              Width="240"
+                              IsEnabled="False"
+                              DisplayMemberPath="Name"/>
+                </StackPanel>
+            </StackPanel>
+        </GroupBox>
+
+        <!-- Header -->
+        <TextBlock Grid.Row="1"
+                   Text="Select filters to include:"
+                   FontSize="13" FontWeight="SemiBold"
+                   Margin="0,0,0,8"/>
+
+        <!-- Filter list with checkboxes and color preview -->
+        <Grid Grid.Row="2" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <ListBox x:Name="FilterListBox"
+                     Grid.Column="0"
+                     SelectionMode="Single"
+                     HorizontalContentAlignment="Stretch"
+                     BorderBrush="#CCCCCC"
+                     BorderThickness="1">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="2,3">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <CheckBox Grid.Column="0"
+                                      IsChecked="{Binding IsSelected}"
+                                      VerticalAlignment="Center"
+                                      Margin="0,0,6,0"/>
+
+                            <!-- Color swatch preview -->
+                            <Border Grid.Column="1"
+                                    Width="20" Height="14"
+                                    BorderBrush="#999" BorderThickness="1"
+                                    Margin="0,0,8,0"
+                                    VerticalAlignment="Center">
+                                <Border.Background>
+                                    <SolidColorBrush Color="{Binding DisplayColor}"/>
+                                </Border.Background>
+                            </Border>
+
+                            <!-- Filter name -->
+                            <TextBlock Grid.Column="2"
+                                       Text="{Binding FilterName}"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <!-- Up/Down reorder buttons -->
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="6,0,0,0">
+                <Button x:Name="MoveUpButton" Content="&#9650;" Width="28" Height="28"
+                        Margin="0,0,0,4" Click="MoveUpButton_Click"
+                        ToolTip="Move selected filter up"/>
+                <Button x:Name="MoveDownButton" Content="&#9660;" Width="28" Height="28"
+                        Click="MoveDownButton_Click"
+                        ToolTip="Move selected filter down"/>
+                <Separator Margin="0,8"/>
+                <Button x:Name="SelectAllButton" Content="All" Width="28" Height="24"
+                        Margin="0,4,0,0" Click="SelectAllButton_Click"
+                        ToolTip="Select all" FontSize="10"/>
+                <Button x:Name="SelectNoneButton" Content="None" Width="28" Height="24"
+                        Margin="0,4,0,0" Click="SelectNoneButton_Click"
+                        ToolTip="Deselect all" FontSize="10"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- Info text -->
+        <TextBlock Grid.Row="3"
+                   x:Name="InfoText"
+                   FontStyle="Italic" Foreground="Gray"
+                   Margin="0,0,0,8"/>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="ActionButton" Content="Create Legend" Width="90" Height="28"
+                    Margin="0,0,8,0" IsDefault="True"
+                    Click="ActionButton_Click"/>
+            <Button Content="Cancel" Width="80" Height="28"
+                    IsCancel="True"
+                    Click="CancelButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

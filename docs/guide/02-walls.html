@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2 — Walls | BimTasksV2 Guide</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<div class="container">
+
+<!-- ══════════════════════════════════════════════════════════
+     SECTION 2 — WALLS
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-header">
+    <span class="section-num">2</span>
+    <div>
+      <div class="section-title">Walls</div>
+      <div class="section-desc">10 commands &mdash; phase sync, copy, height, split, overlaps, cladding, trim corners, window families</div>
+    </div>
+  </div>
+
+  <p style="font-size:0.88rem; color:#374151; margin-bottom:1rem;">
+    The Walls panel is the largest group. It covers the full lifecycle of wall manipulation:
+    copying from links, adjusting geometry, splitting compound walls into layers,
+    detecting duplicates, and adding cladding. The <strong>Split Wall &rarr; Trim Corners</strong>
+    pipeline is the most complex multi-step workflow in the entire add-in.
+  </p>
+</section>
+
+<!-- ── 2.1 SYNC PHASES ────────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Sync Phases</span>
+      <span class="cmd-ribbon">Ribbon: Walls &rarr; Sync Phases</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Sets the <code>PHASE_CREATED</code> parameter of selected windows and doors to match
+      their host wall's phase. Useful after walls are reassigned to different phases &mdash;
+      the hosted elements don't follow automatically.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Select one or more windows/doors (or select walls that host them).</li>
+      <li>Click <strong>Sync Phases</strong>.</li>
+      <li>The handler filters selection to windows and doors only.</li>
+      <li>For each element, reads the host wall's <code>PHASE_CREATED</code> and copies it to the element.</li>
+      <li>Elements with read-only phase parameters are skipped and reported.</li>
+      <li>Shows summary: "Updated X elements, Y failed."</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/SetSelectedWindowAndDoorPhaseToWallPhaseHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Note</span>
+        <div class="info-text">Does not validate that the selection is non-empty &mdash; will silently show "0 updated" if nothing is selected.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 2.2 COPY LINKED WALLS ──────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Copy Linked Walls</span>
+      <span class="cmd-ribbon">Ribbon: Walls &rarr; Copy Linked Walls</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Copies all walls from a selected Revit link instance into the host document,
+      applying the link's transform so they land in the correct position.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Copy Linked Walls</strong>.</li>
+      <li>Pick a Revit link instance in the viewport (custom <code>LinkSelectionFilter</code>).</li>
+      <li>Handler retrieves all walls from the linked document.</li>
+      <li>Uses <code>ElementTransformUtils.CopyElements()</code> with the link's total transform.</li>
+      <li>Newly copied walls are selected in the UI.</li>
+      <li>Shows count summary.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/CopyLinkedWallsHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box tip">
+        <span class="info-label">Good</span>
+        <div class="info-text">Handles user cancellation (Esc) gracefully via <code>OperationCanceledException</code>.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 2.3 ADJUST WALL HEIGHT TO FLOORS ───────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Wall To Floors</span>
+      <span class="cmd-ribbon">Ribbon: Walls &rarr; Wall To Floors</span>
+    </div>
+    <span class="status status-sketchy">Sketchy</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Auto-adjusts selected walls' base offset and top to sit flush against the nearest
+      floors above and below. Uses <code>ReferenceIntersector</code> to cast rays from
+      wall endpoints to find floor surfaces.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Select one or more walls.</li>
+      <li>Click <strong>Wall To Floors</strong>.</li>
+      <li>Handler finds (or falls back to) the default <code>{3D}</code> view for ray casting.</li>
+      <li>For each wall:
+        <ul>
+          <li>Casts rays downward from wall base &rarr; finds floor below &rarr; adjusts base offset.</li>
+          <li>Casts rays upward from wall top &rarr; finds floor above &rarr; adjusts top offset or unconnected height.</li>
+        </ul>
+      </li>
+      <li>Shows completion summary.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/AdjustWallHeightToFloorsHandler.cs</span>
+    </div>
+
+    <div class="issue-card" style="margin-top:1rem;">
+      <div class="issue-title">No Per-Wall Error Handling</div>
+      <div class="issue-body">
+        <p>The main loop has no try-catch per wall. If one wall has invalid geometry or a
+        null <code>LocationCurve</code>, the entire operation crashes. Each iteration should
+        be wrapped individually.</p>
+      </div>
+    </div>
+    <div class="improve-card">
+      <div class="improve-title">Assumes Linear Walls Only</div>
+      <div class="improve-body">
+        <p>Ray casting uses start/end points of the wall curve. Curved walls will only have
+        rays at their endpoints, missing the mid-arc. Not necessarily wrong, but worth knowing.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 2.4 CHANGE WALL HEIGHT ─────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Wall Height</span>
+      <span class="cmd-ribbon">Ribbon: Walls &rarr; Wall Height</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Shows a dialog to manually add height to the top and/or bottom of selected walls.
+      Defaults to +25cm top, +30cm bottom (common Israeli construction adjustment values).
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Select walls.</li>
+      <li>Click <strong>Wall Height</strong>.</li>
+      <li>Dialog appears with checkboxes for "Add to Top" / "Add to Bottom" and amount fields (cm).</li>
+      <li>Click OK &mdash; ViewModel processes selected walls and adjusts parameters.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/ChangeWallHeightHandler.cs</span>
+      <span class="key-file">Views/ChangeWallHeightDialog.xaml</span>
+      <span class="key-file">Views/ChangeWallHeightDialog.xaml.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Architecture</span>
+        <div class="info-text">This is a pure WPF dialog (no ViewModel class) &mdash; the code-behind
+        sets <code>DataContext = this</code> and exposes properties directly.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── 2.5 SPLIT WALL ─────────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Split Wall</span>
+      <span class="cmd-ribbon">Ribbon: Walls &rarr; Split Wall</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Splits a compound (multi-layer) wall into individual single-layer walls. Each layer
+      becomes a separate wall, offset to its correct position. Hosted elements (doors, windows)
+      are transferred to the designated target layer. After splitting, saves results to JSON
+      for the <strong>Trim Corners</strong> follow-up command.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Select one or more compound walls (non-compound walls are filtered out).</li>
+      <li>Click <strong>Split Wall</strong>.</li>
+      <li>Dialog shows layer breakdown: function, material, thickness, and a type-assignment combo per layer.</li>
+      <li>For each layer, choose an existing WallType or select <strong>Auto-Create</strong> (creates a new type matching the layer's thickness).</li>
+      <li>Choose which layer should receive hosted elements (Auto = thickest structural layer, or manual pick).</li>
+      <li>Choose scope: selected walls only, or all walls of the same type in the project.</li>
+      <li>Click OK &mdash; engine runs a 4-transaction pipeline per wall.</li>
+      <li>Results saved to <code>split_results.json</code>. Summary dialog instructs you to run <strong>Trim Corners</strong> next.</li>
+    </ol>
+
+    <div class="diagram-wrap">
+      <div class="diagram-title">Split Wall &mdash; 4-Transaction Pipeline (per wall)</div>
+      <div class="mermaid">
+graph LR
+  A["Record joins\n& geometry"] --> B["Tx 1:\nCreate replacement\nwalls (one per layer)"]
+  B --> C["Tx 2:\nTransfer hosted\nelements to target"]
+  C --> D["Tx 3:\nDelete original\ncompound wall"]
+  D --> E["Tx 4:\nRe-establish\ngeometry joins"]
+  E --> F["Return\nSplitResult"]
+
+  style A fill:#f1f5f9,stroke:#94a3b8
+  style B fill:#1e3a5f,color:#fff
+  style C fill:#7c3aed,color:#fff
+  style D fill:#b91c1c,color:#fff
+  style E fill:#166534,color:#fff
+  style F fill:#f1f5f9,stroke:#94a3b8
+      </div>
+    </div>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/SplitWallHandler.cs</span>
+      <span class="key-file">Helpers/WallSplitter/WallSplitterEngine.cs</span>
+      <span class="key-file">Helpers/WallSplitter/CompoundLayerAnalyzer.cs</span>
+      <span class="key-file">Helpers/WallSplitter/WallJoinReplicator.cs</span>
+      <span class="key-file">Views/WallSplitterDialog.xaml</span>
+    </div>
+
+    <div class="callout" style="margin-top:1rem;">
+      <div class="callout-title">CompoundLayerAnalyzer &mdash; How Offsets Work</div>
+      <div class="callout-body">
+        <p>Each layer's center offset is computed from the wall's <strong>centerline</strong>
+        (ignoring <code>WALL_KEY_REF_PARAM</code>). Formula:
+        <code>centerOffset = (totalWidth/2) - (runningDistance + thickness/2)</code>.
+        Positive offset = toward exterior = <code>wall.Orientation</code> direction.
+        Zero-thickness membrane layers are skipped.</p>
+      </div>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box warning">
+        <span class="info-label">Revit Gotcha</span>
+        <div class="info-text"><code>TransactionGroup.Assimilate()</code> invalidates in-memory Element references.
+        The engine stores <code>ElementId</code> values and re-fetches after assimilation.</div>
+      </div>
+      <div class="info-box gotcha">
+        <span class="info-label">File Dependency</span>
+        <div class="info-text">Results are saved to <code>split_results.json</code> in the plugin DLL directory.
+        If the directory is not writable (e.g., locked by another process), the save fails silently and
+        Trim Corners won't work.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 2.6 TRIM WALL CORNERS ──────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Trim Corners</span>
+      <span class="cmd-ribbon">Dockable Panel &rarr; Trim Corners button</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      The second step of the Split Wall pipeline. After walls are split into layers,
+      the replacement walls don't connect at corners. This command reads the JSON output
+      from Split Wall and cross-joins replacement walls at their intersection points.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Run <strong>Split Wall</strong> first (produces <code>split_results.json</code>).</li>
+      <li>Click <strong>Trim Corners</strong> in the dockable panel.</li>
+      <li>Handler reads JSON, re-fetches walls from document (validates they still exist).</li>
+      <li>Two-pass corner trimming:
+        <ul>
+          <li><strong>Pass 1:</strong> Join replacement walls between split groups by matching layer index (outer&harr;outer, inner&harr;inner).</li>
+          <li><strong>Pass 2:</strong> Trim each replacement against nearby unsplit neighbor walls.</li>
+        </ul>
+      </li>
+      <li>JSON file is deleted after success.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/TrimWallCornersHandler.cs</span>
+      <span class="key-file">Helpers/WallSplitter/WallJoinReplicator.cs</span>
+      <span class="key-file">Views/TrimCornersView.xaml</span>
+    </div>
+
+    <div class="callout" style="margin-top:1rem;">
+      <div class="callout-title">Corner Detection Algorithm</div>
+      <div class="callout-body">
+        <p>Uses 2D line-line intersection on wall centerlines. An intersection is considered
+        a "corner" if the intersection point is within <strong>500mm</strong> of an endpoint
+        on <strong>both</strong> walls. Parallel walls or distant intersections are ignored.
+        End-join states are toggled (allow&rarr;disallow&rarr;allow) to force geometry refresh.</p>
+      </div>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box warning">
+        <span class="info-label">Dependency</span>
+        <div class="info-text">Completely depends on <code>split_results.json</code> from the Split Wall step.
+        If the file is missing, shows "Run Split Wall first."</div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">Thread Safety</span>
+        <div class="info-text">Runs via <code>CommandDispatcherService</code> (queued from the dockable panel button),
+        not directly from a ribbon command.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── 2.7 DETECT OVERLAPPING WALLS ───────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Detect Overlaps</span>
+      <span class="cmd-ribbon">Ribbon: Walls &rarr; Detect Overlaps</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Finds walls of the same type that overlap each other. Groups them, calculates
+      overlap percentage, and lets you highlight, unjoin, or delete the duplicates.
+      100% overlaps (exact duplicates) sort to the top.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Optionally select walls to scan (if none selected, scans all walls in active view).</li>
+      <li>Click <strong>Detect Overlaps</strong>.</li>
+      <li>Detector groups walls by type, then checks pairwise:
+        <ul>
+          <li>Are they parallel? (angular tolerance ~1&deg;)</li>
+          <li>Is perpendicular distance &lt; 50% of wall width?</li>
+          <li>Same base level?</li>
+          <li>Overlap length &ge; 50mm?</li>
+        </ul>
+      </li>
+      <li>Overlap % computed via 3D solid boolean intersection (falls back to 2D estimate if geometry fails).</li>
+      <li>Results dialog shows groups with: overlap%, type, wall count, IDs, and suggested "Keep" wall.</li>
+      <li>Choose action:
+        <ul>
+          <li><strong>Highlight:</strong> Selects and temporarily isolates overlapping walls.</li>
+          <li><strong>Unjoin:</strong> Unjoins all pairs in each group.</li>
+          <li><strong>Delete Duplicates:</strong> Keeps the wall with the most hosted elements, deletes the rest.</li>
+        </ul>
+      </li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/DetectOverlappingWallsHandler.cs</span>
+      <span class="key-file">Helpers/OverlappingWallDetector/OverlappingWallsDetector.cs</span>
+      <span class="key-file">Views/OverlappingWallsResultDialog.xaml</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box tip">
+        <span class="info-label">Design Strength</span>
+        <div class="info-text">
+          Boolean geometry operation (<code>BooleanOperationsUtils</code>) wrapped in try-catch
+          with automatic fallback to 2D width-based estimate. Handles degenerate geometry gracefully.
+        </div>
+      </div>
+      <div class="info-box warning">
+        <span class="info-label">Performance</span>
+        <div class="info-text">
+          Pairwise comparison within each type group is O(n&sup2;). Fine for typical projects,
+          but could be slow with hundreds of walls of the same type.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 2.8/2.9/2.10 CLADDING ──────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Wall Cladding (3 variants)</span>
+      <span class="cmd-ribbon">Ribbon: Walls &rarr; Cladding &blacktriangledown; (Both / External / Internal)</span>
+    </div>
+    <span class="status status-sketchy">Sketchy</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Adds cladding (chipuy) walls parallel to selected walls. Three variants in a split button:
+      <strong>Both Sides</strong>, <strong>External Only</strong>, and <strong>Internal Only</strong>.
+      Each creates offset walls using predefined cladding wall types, then joins geometry and
+      connects end-join corners.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click one of the three cladding buttons.</li>
+      <li>Interactive wall picker &mdash; select walls to clad.</li>
+      <li>For each wall:
+        <ul>
+          <li>Calculates offset from wall orientation and thickness.</li>
+          <li>Creates parallel cladding walls at computed positions.</li>
+          <li>Sets location line: <code>FinishFaceInterior</code> (external) or <code>FinishFaceExterior</code> (internal).</li>
+          <li>Copies parameters from original wall.</li>
+        </ul>
+      </li>
+      <li>Second transaction: joins cladding walls to originals.</li>
+      <li>Third transaction: connects end-join corners between cladding segments.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/AddChipuyToWallHandler.cs</span>
+      <span class="key-file">Commands/Handlers/AddChipuyToExternalWallHandler.cs</span>
+      <span class="key-file">Commands/Handlers/AddChipuyToInternalWallHandler.cs</span>
+      <span class="key-file">Helpers/Cladding/CladdingWallCreator.cs</span>
+    </div>
+
+    <div class="issue-card" style="margin-top:1rem;">
+      <div class="issue-title">Hardcoded Wall Type Names</div>
+      <div class="issue-body">
+        <p>
+          <code>CladdingWallCreator</code> resolves cladding types by name (<code>"w1"</code> for external,
+          <code>"w2"</code> for internal). If these types don't exist in the project, it throws
+          <code>InvalidOperationException</code> with no recovery path. Should either prompt for
+          type selection or create the types automatically.
+        </p>
+      </div>
+    </div>
+    <div class="improve-card">
+      <div class="improve-title">Curved Walls Not Supported</div>
+      <div class="improve-body">
+        <p>Offset calculation assumes linear wall curves. Curved walls will get incorrect
+        cladding placement (the offset vector is computed from <code>wall.Orientation</code>,
+        which is a single direction).</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── 2.11 WINDOW FAMILIES ───────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Window Families</span>
+      <span class="cmd-ribbon">Ribbon: Walls &rarr; Window Families</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Opens a dialog for creating and managing window family types. Lets you define
+      window dimensions and create new <code>FamilySymbol</code> types from an existing
+      window family.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Window Families</strong>.</li>
+      <li>Dialog shows existing window families and their types.</li>
+      <li>Define new type parameters (width, height, sill height).</li>
+      <li>Click Create &mdash; new symbol is duplicated from the base family and parameters are set.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Views/CreateWindowFamiliesDialog.xaml</span>
+      <span class="key-file">Views/CreateWindowFamiliesDialog.xaml.cs</span>
+      <span class="key-file">Models/WindowFamilyModel.cs</span>
+      <span class="key-file">Models/WindowSymbolModel.cs</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     CHAPTER SUMMARY
+     ══════════════════════════════════════════════════════════ -->
+<section class="section" style="margin-top:2rem;">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Walls &mdash; Summary</div>
+    </div>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Command</th>
+        <th>Input</th>
+        <th>UI</th>
+        <th>Transactions</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Sync Phases</td>
+        <td>Selection (W/D)</td>
+        <td>Summary dialog</td>
+        <td>1</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Copy Linked Walls</td>
+        <td>Interactive pick</td>
+        <td>Pick + summary</td>
+        <td>1</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Wall To Floors</td>
+        <td>Selection (walls)</td>
+        <td>Summary dialog</td>
+        <td>1</td>
+        <td><span class="status status-sketchy">Sketchy</span></td>
+      </tr>
+      <tr>
+        <td>Wall Height</td>
+        <td>Selection (walls)</td>
+        <td>Parameter dialog</td>
+        <td>1 (via VM)</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Split Wall</td>
+        <td>Selection (compound)</td>
+        <td>Layer dialog</td>
+        <td>4 per wall</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Trim Corners</td>
+        <td>JSON from Split</td>
+        <td>Button in panel</td>
+        <td>1</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Detect Overlaps</td>
+        <td>Selection or view</td>
+        <td>Results dialog</td>
+        <td>1 per action</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Cladding (x3)</td>
+        <td>Interactive pick</td>
+        <td>None</td>
+        <td>2-3</td>
+        <td><span class="status status-sketchy">Sketchy</span></td>
+      </tr>
+      <tr>
+        <td>Window Families</td>
+        <td>None</td>
+        <td>Create dialog</td>
+        <td>1 per type</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:1.5rem;">
+    <div style="font-weight:700; font-size:0.9rem; color:#1e3a5f; margin-bottom:0.75rem;">Cross-Cutting Observations</div>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>Split Wall + Trim Corners</strong> is the most robust pipeline in the codebase &mdash;
+      4-transaction design with rollback, hosted element transfer, join replication, and a two-pass
+      corner algorithm. Well-engineered.</li>
+      <li><strong>Cladding</strong> is the weakest &mdash; hardcoded type names, no curved wall support,
+      three near-identical handler classes that could be a single handler with a mode parameter.</li>
+      <li><strong>All wall handlers</strong> assume linear walls. Curved wall support is not present
+      anywhere in this panel.</li>
+    </ul>
+  </div>
+</section>
+
+</div><!-- /container -->
+</body>
+</html>

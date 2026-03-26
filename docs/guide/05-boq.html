@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>5 — BOQ | BimTasksV2 Guide</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<div class="container">
+
+<!-- ══════════════════════════════════════════════════════════
+     SECTION 5 — BOQ
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-header">
+    <span class="section-num">5</span>
+    <div>
+      <div class="section-title">BOQ</div>
+      <div class="section-desc">5 commands &mdash; parameter setup, schedule creation, quantity auto-fill, pricing, contract import</div>
+    </div>
+  </div>
+
+  <p style="font-size:0.88rem; color:#374151; margin-bottom:1rem;">
+    The BOQ panel implements a full Bill of Quantities workflow for Israeli construction projects.
+    The pipeline runs in order: set up shared parameters, create reporting schedules,
+    auto-fill quantities from geometry, calculate effective prices for composite items,
+    and import contract sections from Excel. All 5 commands share a common set of
+    19 shared parameters in the <code>"BIMIsrael_BOQ"</code> group.
+  </p>
+
+  <div class="diagram-wrap">
+    <div class="diagram-title">BOQ Pipeline &mdash; Recommended Execution Order</div>
+    <div class="mermaid">
+graph LR
+  A["1. BOQ Setup\n(create params)"] --> B["2. BOQ Schedules\n(create 10 schedules)"]
+  B --> C["3. BOQ AutoFill\n(populate qty)"]
+  C --> D["4. BOQ Calc Price\n(COMP items)"]
+  D --> E["5. Contract Sections\n(Excel import)"]
+
+  style A fill:#8B5CF6,color:#fff
+  style B fill:#7c3aed,color:#fff
+  style C fill:#6d28d9,color:#fff
+  style D fill:#5b21b6,color:#fff
+  style E fill:#4c1d95,color:#fff
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="callout-title">18 Payable Categories</div>
+    <div class="callout-body">
+      BOQ parameters are bound to: Floors, Walls, Roofs, Ceilings, Structural Foundations,
+      Structural Columns, Structural Framing, Structural Framing Systems, Curtain Wall Panels,
+      Curtain Wall Mullions, Doors, Windows, Stairs, Stair Railings, Railings, Ramps, Columns,
+      and Generic Models.
+    </div>
+  </div>
+</section>
+
+<!-- ── 5.1 BOQ SETUP ──────────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">BOQ Setup</span>
+      <span class="cmd-ribbon">Ribbon: BOQ &rarr; BOQ Setup</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Creates 19 shared parameters and binds them as instance parameters to all 18 payable categories.
+      This is the foundation step &mdash; all other BOQ commands depend on these parameters existing.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>BOQ Setup</strong>.</li>
+      <li>Handler checks <code>app.SharedParametersFilename</code> for an existing shared param file.</li>
+      <li>If not found, a <strong>SaveFileDialog</strong> lets the user create/select one.</li>
+      <li>Opens the shared parameter file and gets or creates the <code>"BIMIsrael_BOQ"</code> group.</li>
+      <li>Creates 19 parameters (14 core + 5 generic-model-only) with <code>ReInsert</code>.</li>
+      <li>Binds each parameter as an instance binding to the appropriate categories.</li>
+      <li>Reports success/error count for each parameter.</li>
+    </ol>
+
+    <h4>Parameters Created</h4>
+    <table class="data-table" style="margin:0.5rem 0 1rem 0;">
+      <thead>
+        <tr>
+          <th>Parameter</th>
+          <th>Type</th>
+          <th>Purpose</th>
+          <th>Scope</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>BI_BOQ_Code</td><td>String</td><td>BOQ / contract line item code</td><td>All 18</td></tr>
+        <tr><td>BI_Zone</td><td>String</td><td>Zone / WBS location</td><td>All 18</td></tr>
+        <tr><td>BI_WorkStage</td><td>String</td><td>FOUNDATIONS / FRAME / BUILDING / FINISHES</td><td>All 18</td></tr>
+        <tr><td>BI_CurrentStage</td><td>String</td><td>Sub-stage (DRILLING / CAGE / POUR)</td><td>All 18</td></tr>
+        <tr><td>BI_IsPayItem</td><td>Boolean</td><td>Include in BOQ</td><td>All 18</td></tr>
+        <tr><td>BI_QtyBasis</td><td>String</td><td>AREA / VOLUME / LENGTH / COUNT / COMP</td><td>All 18</td></tr>
+        <tr><td>BI_QtyValue</td><td>Number</td><td>Calculated quantity (metric)</td><td>All 18</td></tr>
+        <tr><td>BI_QtyOverride</td><td>Number</td><td>Manual quantity override</td><td>All 18</td></tr>
+        <tr><td>BI_QtyMultiplier</td><td>Number</td><td>Multiplier (default 1.0)</td><td>All 18</td></tr>
+        <tr><td>BI_UnitPrice</td><td>Number</td><td>Unit price in ILS</td><td>All 18</td></tr>
+        <tr><td>BI_ExecPct_ToDate</td><td>Number</td><td>0&ndash;100% execution progress</td><td>All 18</td></tr>
+        <tr><td>BI_PaidPct_ToDate</td><td>Number</td><td>0&ndash;100% payment progress</td><td>All 18</td></tr>
+        <tr><td>BI_Note</td><td>String</td><td>Short note</td><td>All 18</td></tr>
+        <tr><td>BI_HostElementId</td><td>String</td><td>UniqueId of host element</td><td>All 18</td></tr>
+        <tr><td>BI_SourceElementId</td><td>String</td><td>Link to source element (PayLines)</td><td>GenericModel</td></tr>
+        <tr><td>BI_ComponentRole</td><td>String</td><td>DRILLING / CAGE / CONCRETE / etc.</td><td>GenericModel</td></tr>
+        <tr><td>BI_AnalysisBasis</td><td>String</td><td>Analysis driver basis</td><td>GenericModel</td></tr>
+        <tr><td>BI_EffUnitPrice</td><td>Number</td><td>Effective unit price (ILS/unit)</td><td>GenericModel</td></tr>
+        <tr><td>BI_ContractValue</td><td>Number</td><td>UnitPrice &times; QtyValue</td><td>GenericModel</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/BOQSetupHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Transaction</span>
+        <div class="info-text">Single transaction: <code>"Setup BOQ Parameters"</code></div>
+      </div>
+      <div class="info-box tip">
+        <span class="info-label">Idempotent</span>
+        <div class="info-text">
+          Uses <code>ReInsert</code> &mdash; safe to run multiple times.
+          Existing parameters are overwritten, not duplicated.
+        </div>
+      </div>
+    </div>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">No Backup of Shared Parameter File</div>
+      <div class="improve-body">
+        <p>Directly modifies the shared parameter file without creating a backup first.
+        If the file is shared across multiple projects, accidental overwrites
+        could affect other teams.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 5.2 BOQ CREATE SCHEDULES ───────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">BOQ Schedules</span>
+      <span class="cmd-ribbon">Ribbon: BOQ &rarr; BOQ Schedules</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Creates 10 Revit schedules covering BOQ reporting, payment status, quality assurance,
+      and per-stage breakdowns. If a schedule name already exists, appends <code>_v2</code>,
+      <code>_v3</code>, etc. (up to 99).
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>BOQ Schedules</strong>.</li>
+      <li>Handler creates all 10 schedules in a single transaction.</li>
+      <li>Each schedule gets fields, sort groups, filters, and grand totals configured automatically.</li>
+      <li>Reports success/error count.</li>
+    </ol>
+
+    <h4>Schedules Created</h4>
+    <table class="data-table" style="margin:0.5rem 0 1rem 0;">
+      <thead>
+        <tr>
+          <th>Schedule</th>
+          <th>Purpose</th>
+          <th>Filter</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>BI_MASTER_BOQ</code></td>
+          <td>Master list &mdash; WorkStage, Zone, Code, Category, Qty, Price</td>
+          <td>IsPayItem = Yes</td>
+        </tr>
+        <tr>
+          <td><code>BI_PAYMENT_STATUS</code></td>
+          <td>Progress tracking &mdash; Exec%, Paid%, Qty, Price</td>
+          <td>IsPayItem = Yes</td>
+        </tr>
+        <tr>
+          <td><code>BI_PAYMENT_COMPONENTS</code></td>
+          <td>GenericModel PayLine breakdown by SourceElementId</td>
+          <td>IsPayItem = Yes, SourceElementId has value</td>
+        </tr>
+        <tr>
+          <td><code>BI_ANALYSIS_UNIT_COST</code></td>
+          <td>COMP item analysis &mdash; ContractValue, AnalysisBasis, EffUnitPrice</td>
+          <td>QtyBasis = "COMP", IsPayItem = Yes</td>
+        </tr>
+        <tr>
+          <td><code>BI_QA_MISSING_BOQ</code></td>
+          <td>QA: pay items with no BOQ code assigned</td>
+          <td>IsPayItem = Yes, BOQ_Code has NO value</td>
+        </tr>
+        <tr>
+          <td><code>BI_QA_MISSING_QTY</code></td>
+          <td>QA: pay items with no quantity basis</td>
+          <td>IsPayItem = Yes, QtyBasis has NO value</td>
+        </tr>
+        <tr>
+          <td><code>BI_STAGE_FOUNDATIONS</code></td>
+          <td rowspan="4">Per-stage breakdown &mdash; Zone, Code, Qty, Price, Exec%</td>
+          <td>WorkStage = "FOUNDATIONS"</td>
+        </tr>
+        <tr>
+          <td><code>BI_STAGE_FRAME</code></td>
+          <td>WorkStage = "FRAME"</td>
+        </tr>
+        <tr>
+          <td><code>BI_STAGE_BUILDING</code></td>
+          <td>WorkStage = "BUILDING"</td>
+        </tr>
+        <tr>
+          <td><code>BI_STAGE_FINISHES</code></td>
+          <td>WorkStage = "FINISHES"</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/BOQCreateSchedulesHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Transaction</span>
+        <div class="info-text">Single transaction: <code>"Create BOQ Schedules"</code></div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">Name Collision</span>
+        <div class="info-text">
+          Uses <code>GetUniqueName()</code> to append <code>_v2</code>&hellip;<code>_v99</code>
+          if a schedule name is taken. Fails at 100+ versions.
+        </div>
+      </div>
+    </div>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Silent Failures in Sort/Filter Setup</div>
+      <div class="improve-body">
+        <p>Helper methods <code>FindField()</code>, <code>AddSortGroup()</code>, and
+        <code>AddFilterHasValue()</code> use empty try/catch blocks.
+        If a BOQ parameter is missing from the schedule, the sort or filter
+        silently fails and the schedule appears correct but has no
+        grouping or filtering applied.</p>
+      </div>
+    </div>
+    <div class="improve-card">
+      <div class="improve-title">Hardcoded Stage Names</div>
+      <div class="improve-body">
+        <p>The 4 stage-specific schedules use hardcoded strings:
+        <code>"FOUNDATIONS"</code>, <code>"FRAME"</code>, <code>"BUILDING"</code>,
+        <code>"FINISHES"</code>. Projects with different stage naming conventions
+        would need code changes.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── 5.3 BOQ AUTOFILL QTY ───────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">BOQ AutoFill Qty</span>
+      <span class="cmd-ribbon">Ribbon: BOQ &rarr; BOQ AutoFill</span>
+    </div>
+    <span class="status status-sketchy">Sketchy</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Auto-populates <code>BI_QtyValue</code> and <code>BI_QtyBasis</code> for all elements
+      where <code>BI_IsPayItem = Yes</code>. Reads geometry from Revit, converts from
+      imperial to metric, applies multipliers and overrides, and copies legacy Hebrew
+      parameters to BI_ equivalents.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>BOQ AutoFill</strong>.</li>
+      <li>Collects all elements in 18 payable categories where <code>BI_IsPayItem = 1</code>.</li>
+      <li>For each element:
+        <ul>
+          <li>Determines <code>BI_QtyBasis</code> from category mapping (if not already set).</li>
+          <li>Special case: type name containing <code>"CONC"</code> &rarr; VOLUME instead of AREA.</li>
+          <li>Reads quantity from built-in parameters; falls back to geometry extraction.</li>
+          <li>Converts to metric (m, m&sup2;, m&sup3;) and rounds to 4 decimal places.</li>
+          <li>Applies <code>BI_QtyMultiplier</code> and <code>BI_QtyOverride</code>.</li>
+          <li>Copies legacy Hebrew params to BI_ equivalents.</li>
+          <li>Writes <code>BI_HostElementId</code> (for hosted elements like doors/windows/mullions).</li>
+        </ul>
+      </li>
+      <li>COMP items are silently skipped.</li>
+      <li>Reports updated / skipped / errors.</li>
+    </ol>
+
+    <h4>Category &rarr; Default Basis Mapping</h4>
+    <table class="data-table" style="margin:0.5rem 0 1rem 0;">
+      <thead>
+        <tr>
+          <th>Basis</th>
+          <th>Categories</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>AREA</td>
+          <td>Floors, Walls, Roofs, Ceilings, Ramps, Curtain Wall Panels</td>
+        </tr>
+        <tr>
+          <td>VOLUME</td>
+          <td>Structural Foundations, Structural Columns, Structural Framing, Structural Framing Systems, Columns</td>
+        </tr>
+        <tr>
+          <td>LENGTH</td>
+          <td>Stair Railings, Railings, Curtain Wall Mullions</td>
+        </tr>
+        <tr>
+          <td>COUNT</td>
+          <td>Doors, Windows, Stairs, Generic Models</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>Quantity Extraction Fallback Chain</h4>
+    <table class="data-table" style="margin:0.5rem 0 1rem 0;">
+      <thead>
+        <tr>
+          <th>Basis</th>
+          <th>Primary Source</th>
+          <th>Fallback</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>AREA</td>
+          <td><code>HOST_AREA_COMPUTED</code></td>
+          <td>Sum geometry face areas &divide; 6</td>
+        </tr>
+        <tr>
+          <td>VOLUME</td>
+          <td><code>HOST_VOLUME_COMPUTED</code></td>
+          <td>Sum geometry solid volumes (incl. GeometryInstance)</td>
+        </tr>
+        <tr>
+          <td>LENGTH</td>
+          <td><code>CURVE_ELEM_LENGTH</code> &rarr; <code>STRUCTURAL_FRAME_CUT_LENGTH</code> &rarr; <code>INSTANCE_LENGTH_PARAM</code></td>
+          <td><code>LocationCurve.Curve.Length</code></td>
+        </tr>
+        <tr>
+          <td>COUNT</td>
+          <td colspan="2">Always 1.0</td>
+        </tr>
+        <tr>
+          <td>COMP</td>
+          <td colspan="2">Skipped entirely (returns false)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/BOQAutoFillQtyHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Transaction</span>
+        <div class="info-text">Single transaction: <code>"BOQ Auto-Fill Quantities"</code></div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">Unit Conversion</span>
+        <div class="info-text">
+          Feet &rarr; meters (0.3048), sq.ft &rarr; m&sup2; (0.0929), cu.ft &rarr; m&sup3; (0.0283).
+          Revit stores everything in imperial internally.
+        </div>
+      </div>
+    </div>
+
+    <div class="issue-card" style="margin-top:1rem;">
+      <div class="issue-title">Suspicious Area Geometry Fallback: Divide by 6</div>
+      <div class="issue-body">
+        <p>When <code>HOST_AREA_COMPUTED</code> is unavailable, the fallback sums all geometry
+        face areas then <strong>divides by 6</strong>:
+        <code>return ConvertToSquareMeters(totalArea / 6)</code>.
+        This assumes a box with 6 equal faces (average = one face area), which is
+        incorrect for non-cubic geometry like walls, sloped roofs, or L-shaped elements.
+        The result will be wrong for most real-world cases.</p>
+      </div>
+    </div>
+    <div class="issue-card">
+      <div class="issue-title">Fragile Concrete Detection</div>
+      <div class="issue-body">
+        <p>Determines VOLUME basis by checking if the type name contains <code>"CONC"</code>
+        (case-sensitive substring). This is locale-dependent and could match unintended
+        type names (e.g., "CONCRETE_BLOCK" treated same as "CONCRETE_POUR").
+        Non-English projects would miss concrete elements entirely.</p>
+      </div>
+    </div>
+    <div class="improve-card">
+      <div class="improve-title">COMP Items Silently Skipped</div>
+      <div class="improve-body">
+        <p>Elements with <code>BI_QtyBasis = "COMP"</code> return false without logging.
+        The user sees these in the "skipped" count with no explanation of why they were
+        skipped. A brief note in the results dialog would help.</p>
+      </div>
+    </div>
+    <div class="improve-card">
+      <div class="improve-title">Legacy Hebrew Parameter Copy</div>
+      <div class="improve-body">
+        <p>Copies values from Hebrew-named parameters
+        (<span dir="rtl">&#1505;&#1506;&#1497;&#1507; &#1514;&#1511;&#1510;&#1497;&#1489;&#1497;</span>,
+        <span dir="rtl">&#1514;&#1488;&#1493;&#1512; &#1505;&#1506;&#1497;&#1507;</span>,
+        <span dir="rtl">&#1511;&#1489;&#1500;&#1503; &#1502;&#1513;&#1504;&#1492;</span>)
+        to BI_ equivalents. This is a migration bridge from the old parameter naming
+        convention. Should be removed once all projects are migrated.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 5.4 BOQ CALC EFFECTIVE UNIT PRICE ──────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">BOQ Calc Price</span>
+      <span class="cmd-ribbon">Ribbon: BOQ &rarr; BOQ Calc Price</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Calculates effective unit price for COMP (composite/lump-sum) PayLine items
+      by dividing contract value by the total physical quantity of matching elements.
+      This answers: "if we spread this contract line item across all physical elements,
+      what's the cost per unit?"
+    </p>
+
+    <div class="diagram-wrap">
+      <div class="diagram-title">Effective Unit Price Calculation</div>
+      <div class="mermaid">
+graph TD
+  A["Collect physical pay items\n(non-COMP, QtyValue > 0)"] --> B["Group by BOQ code + basis\nSum quantities"]
+  B --> C["Find all COMP PayLines\n(GenericModel, QtyBasis=COMP)"]
+  C --> D["For each PayLine:\nContractValue = UnitPrice × QtyValue"]
+  D --> E{"Physical items exist\nfor same code + basis?"}
+  E -->|Yes| F["EffUnitPrice =\nContractValue ÷ SumPhysicalQty"]
+  E -->|No| G["EffUnitPrice = 0"]
+  F --> H["Write BI_ContractValue\n+ BI_EffUnitPrice"]
+  G --> H
+
+  style A fill:#1e3a5f,color:#fff
+  style D fill:#7c3aed,color:#fff
+  style F fill:#166534,color:#fff
+  style G fill:#9a3412,color:#fff
+      </div>
+    </div>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>BOQ Calc Price</strong>.</li>
+      <li>Collects all physical (non-COMP) pay items, sums <code>BI_QtyValue</code> grouped by BOQ code + basis.</li>
+      <li>Finds all COMP PayLines (GenericModel elements with <code>BI_QtyBasis = "COMP"</code>).</li>
+      <li>For each PayLine:
+        <ul>
+          <li>Reads <code>BI_BOQ_Code</code>, <code>BI_AnalysisBasis</code>, <code>BI_UnitPrice</code>, <code>BI_QtyValue</code>.</li>
+          <li>Calculates <code>ContractValue = UnitPrice &times; QtyValue</code>.</li>
+          <li>Looks up total physical qty for same BOQ code + analysis basis.</li>
+          <li>Calculates <code>EffUnitPrice = ContractValue &divide; SumPhysicalQty</code>.</li>
+        </ul>
+      </li>
+      <li>Writes <code>BI_ContractValue</code> and <code>BI_EffUnitPrice</code> to each PayLine.</li>
+      <li>Reports per-PayLine results with breakdown.</li>
+    </ol>
+
+    <h4>Example</h4>
+    <div class="callout">
+      <div class="callout-body" style="font-size:0.85rem;">
+        <strong>PayLine:</strong> BOQ code "03-02-001", COMP, AnalysisBasis=AREA, UnitPrice=5,000, QtyValue=2<br/>
+        &rarr; ContractValue = 5,000 &times; 2 = <strong>10,000 ILS</strong><br/><br/>
+        <strong>Physical items</strong> with same BOQ code: Item A (50 m&sup2;) + Item B (30 m&sup2;) = <strong>80 m&sup2;</strong><br/><br/>
+        &rarr; EffUnitPrice = 10,000 &divide; 80 = <strong>125 ILS/m&sup2;</strong>
+      </div>
+    </div>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/BOQCalcEffUnitPriceHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Transaction</span>
+        <div class="info-text">Single transaction: <code>"Calculate Effective Unit Prices"</code></div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">Validation</span>
+        <div class="info-text">
+          Rejects PayLines missing BOQ code, invalid analysis basis, or zero unit price.
+          Each error is collected and reported individually.
+        </div>
+      </div>
+    </div>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Silent Zero Results</div>
+      <div class="improve-body">
+        <p>When no physical items match a PayLine's BOQ code + analysis basis,
+        <code>BI_EffUnitPrice</code> is set to 0 and marked as success. The user
+        won't know if the calculation was skipped due to missing data or if the
+        effective price is genuinely zero. Should log or flag these cases.</p>
+      </div>
+    </div>
+    <div class="improve-card">
+      <div class="improve-title">No Type Parameter Fallback</div>
+      <div class="improve-body">
+        <p>Unlike AutoFill, this handler only checks instance-level parameters when
+        collecting physical items. Elements with BOQ codes set on the type
+        (rather than instance) will be missed, potentially underestimating
+        the physical quantity denominator.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── 5.5 CONTRACT SECTIONS (SEIFEI CHOZE) ───────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Contract Sections (Seifei Choze)</span>
+      <span class="cmd-ribbon">Ribbon: BOQ &rarr; Contract Sections</span>
+    </div>
+    <span class="status status-sketchy">Sketchy</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Imports contract line items from an Excel file into Revit key schedules.
+      Creates or updates key schedules for 9 categories, binding 4 Hebrew-named shared
+      parameters. Each Excel row becomes a key entry with name, item number, description,
+      price, and subcontractor.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Contract Sections</strong>.</li>
+      <li>Handler checks if required shared parameters are bound. If not, binds them in a first transaction.</li>
+      <li>Opens a file dialog to select an <code>.xlsx</code> / <code>.xls</code> file.</li>
+      <li>Reads the first worksheet (row 2+). Columns: KeyName, ItemNumber, Description, Price, Subcontractor.</li>
+      <li>Stops on 5 consecutive empty rows or 10,000 rows max.</li>
+      <li>For each of 9 target categories:
+        <ul>
+          <li>Gets or creates <code>BIMTasks_Key_{Category}</code> key schedule.</li>
+          <li>Ensures all 4 parameter fields exist in the schedule.</li>
+          <li>For each Excel row: finds existing key by name (case-insensitive) or inserts new row.</li>
+          <li>Sets all 5 fields on the key element.</li>
+        </ul>
+      </li>
+      <li>Reports results per category.</li>
+    </ol>
+
+    <h4>Required Hebrew Parameters</h4>
+    <table class="data-table" style="margin:0.5rem 0 1rem 0;">
+      <thead>
+        <tr>
+          <th>Hebrew Name</th>
+          <th>English Meaning</th>
+          <th>Maps To</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td dir="rtl">&#1505;&#1506;&#1497;&#1507; &#1514;&#1511;&#1510;&#1497;&#1489;&#1497;</td><td>Budget section code</td><td>ItemNumber</td></tr>
+        <tr><td dir="rtl">&#1514;&#1488;&#1493;&#1512; &#1505;&#1506;&#1497;&#1507;</td><td>Section description</td><td>Description</td></tr>
+        <tr><td dir="rtl">&#1511;&#1489;&#1500;&#1503; &#1502;&#1513;&#1504;&#1492;</td><td>Subcontractor</td><td>Subcontractor</td></tr>
+        <tr><td dir="rtl">&#1502;&#1495;&#1497;&#1512; &#1499;&#1493;&#1500;&#1500;</td><td>Total price</td><td>Price</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Target Categories (9)</h4>
+    <p style="font-size:0.88rem; color:#374151;">
+      Walls, Floors, Structural Columns, Structural Framing, Roofs, Doors, Windows,
+      Generic Models, Ceilings.
+    </p>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/CreateSeifeiChozeHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Transactions</span>
+        <div class="info-text">
+          Two transactions: <code>"Bind BIMTasks Parameters"</code> (if needed)
+          and <code>"Import Key Schedules"</code>.
+        </div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">Price Parsing</span>
+        <div class="info-text">
+          Handles double, int, long, float, decimal types.
+          Strips currency symbols (&#8362;, $, &euro;). Tries invariant and current culture.
+        </div>
+      </div>
+    </div>
+
+    <div class="issue-card" style="margin-top:1rem;">
+      <div class="issue-title">Weak Parameter Binding Validation</div>
+      <div class="issue-body">
+        <p>Only checks if the <strong>first</strong> and <strong>last</strong> required parameter
+        are bound to the first and last target category. If middle parameters are missing
+        on middle categories, it goes undetected. The binding phase is skipped and
+        key schedule updates will fail silently for those categories.</p>
+      </div>
+    </div>
+    <div class="issue-card">
+      <div class="issue-title">Fragile Key Row Insertion</div>
+      <div class="issue-body">
+        <p>After inserting a new row into a key schedule, the handler finds the new element
+        by searching for an unnamed/empty-name element in the collector. This assumes
+        only one unnamed element exists at any time. If multiple rows are inserted or
+        an existing element has no name, the wrong element may be updated.</p>
+      </div>
+    </div>
+    <div class="issue-card">
+      <div class="issue-title">Hebrew Parameter Names Hardcoded as Unicode</div>
+      <div class="issue-body">
+        <p>The 4 required parameter names are stored as Unicode escape sequences
+        (<code>\u05E1\u05E2\u05D9\u05E3...</code>). This is a brittle locale-specific
+        dependency. If the shared parameter file uses slightly different names
+        (e.g., with/without spaces), the lookup fails silently.</p>
+      </div>
+    </div>
+    <div class="improve-card">
+      <div class="improve-title">No Excel Format Validation</div>
+      <div class="improve-body">
+        <p>Assumes the Excel file has exactly 5 columns in a specific order with no
+        header validation. A differently structured file will silently misassign data.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     CHAPTER SUMMARY
+     ══════════════════════════════════════════════════════════ -->
+<section class="section" style="margin-top:2rem;">
+  <div class="section-header">
+    <div>
+      <div class="section-title">BOQ &mdash; Summary</div>
+    </div>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Command</th>
+        <th>What It Creates/Updates</th>
+        <th>Transactions</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>BOQ Setup</td>
+        <td>19 shared parameters &rarr; 18 categories</td>
+        <td>1</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>BOQ Schedules</td>
+        <td>10 reporting schedules (master, payment, QA, stages)</td>
+        <td>1</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>BOQ AutoFill Qty</td>
+        <td>BI_QtyValue + BI_QtyBasis from geometry</td>
+        <td>1</td>
+        <td><span class="status status-sketchy">Sketchy</span></td>
+      </tr>
+      <tr>
+        <td>BOQ Calc Price</td>
+        <td>BI_EffUnitPrice + BI_ContractValue for COMP items</td>
+        <td>1</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Contract Sections</td>
+        <td>Key schedules from Excel (9 categories, 4 Hebrew params)</td>
+        <td>2</td>
+        <td><span class="status status-sketchy">Sketchy</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:1.5rem;">
+    <div style="font-weight:700; font-size:0.9rem; color:#1e3a5f; margin-bottom:0.75rem;">Cross-Cutting Observations</div>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>The pipeline design is sound</strong> &mdash; Setup &rarr; Schedules &rarr; AutoFill &rarr;
+      CalcPrice &rarr; Import is a logical progression. Each command builds on the previous
+      one's output. Running them out of order will produce incomplete or empty results.</li>
+      <li><strong>Israeli construction domain is baked in</strong> &mdash; Hebrew parameter names,
+      ILS currency, 4 hardcoded work stages (FOUNDATIONS/FRAME/BUILDING/FINISHES), and
+      BIMIsrael-specific naming conventions. Adapting this for international projects
+      would require significant refactoring.</li>
+      <li><strong>AutoFill is the weakest link</strong> &mdash; the divide-by-6 geometry fallback
+      and fragile concrete detection are likely to produce wrong quantities in edge cases.
+      The built-in parameter path (HOST_AREA_COMPUTED, etc.) is reliable for standard
+      elements, but the geometry fallback needs rework.</li>
+      <li><strong>Contract Sections has the most issues</strong> &mdash; weak binding validation,
+      fragile row insertion, and hardcoded Hebrew names make it the most brittle command
+      in the panel. It works for the specific use case it was built for, but any deviation
+      from the expected format will cause silent failures.</li>
+      <li><strong>Error handling is consistent</strong> &mdash; all 5 commands use per-element
+      try/catch, collect errors, and report success/error counts. No command will abort
+      the entire batch on a single element failure.</li>
+    </ul>
+  </div>
+</section>
+
+</div><!-- /container -->
+</body>
+</html>

@@ -135,6 +135,11 @@ namespace BimTasksV2.Commands.Handlers
 
             SetParamDouble(elem, "BI_QtyValue", qtyValue);
 
+            // Copy Hebrew parameters to BI_ fields
+            CopyParam(elem, "סעיף תקציבי", "BI_BOQ_Code");
+            CopyParam(elem, "תאור סעיף", "BI_Description");
+            CopyParam(elem, "קבלן משנה", "BI_Subcontractor");
+
             // Write host element reference
             string hostId = GetHostElementId(elem);
             if (hostId != null)
@@ -279,6 +284,13 @@ namespace BimTasksV2.Commands.Handlers
         private string GetParamString(Element elem, string paramName)
         {
             var param = elem.LookupParameter(paramName);
+            // Fall back to type parameter if not found on instance
+            if (param == null)
+            {
+                var typeId = elem.GetTypeId();
+                if (typeId != ElementId.InvalidElementId)
+                    param = elem.Document.GetElement(typeId)?.LookupParameter(paramName);
+            }
             if (param == null || param.StorageType != StorageType.String) return null;
             return param.AsString()?.Trim();
         }
@@ -327,6 +339,48 @@ namespace BimTasksV2.Commands.Handlers
             var param = elem.get_Parameter(bip);
             if (param == null || param.StorageType != StorageType.Double) return 0;
             return param.AsDouble();
+        }
+
+        private void CopyParam(Element elem, string sourceName, string targetName)
+        {
+            var sourceParam = elem.LookupParameter(sourceName);
+            if (sourceParam == null)
+            {
+                // Try type parameter
+                var typeId = elem.GetTypeId();
+                if (typeId != ElementId.InvalidElementId)
+                    sourceParam = elem.Document.GetElement(typeId)?.LookupParameter(sourceName);
+            }
+
+            if (sourceParam == null)
+            {
+                Log.Debug("Element {Id}: source param '{Source}' not found", elem.Id, sourceName);
+                return;
+            }
+
+            string value = sourceParam.StorageType == StorageType.String
+                ? sourceParam.AsString()?.Trim()
+                : sourceParam.AsValueString()?.Trim();
+
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                Log.Debug("Element {Id}: source param '{Source}' is empty", elem.Id, sourceName);
+                return;
+            }
+
+            var targetParam = elem.LookupParameter(targetName);
+            if (targetParam == null)
+            {
+                Log.Warning("Element {Id}: target param '{Target}' not found", elem.Id, targetName);
+                return;
+            }
+
+            if (!targetParam.IsReadOnly && targetParam.StorageType == StorageType.String)
+            {
+                targetParam.Set(value);
+                Log.Information("Element {Id}: copied '{Source}' -> '{Target}' = {Value}",
+                    elem.Id, sourceName, targetName, value);
+            }
         }
 
         private string GetElementTypeName(Element elem)

@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>4 — Schedules | BimTasksV2 Guide</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<div class="container">
+
+<!-- ══════════════════════════════════════════════════════════
+     SECTION 4 — SCHEDULES
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-header">
+    <span class="section-num">4</span>
+    <div>
+      <div class="section-title">Schedules</div>
+      <div class="section-desc">3 commands &mdash; export, roundtrip editing, key schedule import</div>
+    </div>
+  </div>
+
+  <p style="font-size:0.88rem; color:#374151; margin-bottom:1rem;">
+    The Schedules panel bridges Revit schedules and Excel. Two services power these commands:
+    <code>ScheduleExcelExportService</code> for professional one-way export with full formatting,
+    and <code>ScheduleExcelRoundtripService</code> for bidirectional editing with element tracking.
+    All three commands share the <code>SchedulePickerWindow</code> for schedule selection.
+  </p>
+
+  <div class="callout">
+    <div class="callout-title">Schedule Filtering</div>
+    <div class="callout-body">
+      All three commands filter schedules before showing the picker. Excluded:
+      titleblock revision schedules, internal keynote schedules, key schedules,
+      and system schedules (names starting with <code>&lt;</code>).
+    </div>
+  </div>
+</section>
+
+<!-- ── 4.1 EXPORT SCHEDULE TO EXCEL ───────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Export Schedule</span>
+      <span class="cmd-ribbon">Ribbon: Schedules &rarr; Export Schedule</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Exports one or more schedules to professionally formatted Excel files.
+      Supports two modes: all selected schedules in a single workbook (one sheet per schedule),
+      or each schedule as a separate <code>.xlsx</code> file in a folder.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Export Schedule</strong>.</li>
+      <li><code>SchedulePickerWindow</code> opens in multi-select mode with search filter.</li>
+      <li>Select schedules (Ctrl+Click for multiple). Choose export mode: "One Excel file" or "Separate files."</li>
+      <li><strong>Single file:</strong> Save dialog &rarr; all schedules written as sheets in one workbook.</li>
+      <li><strong>Separate files:</strong> Folder picker &rarr; one <code>.xlsx</code> per schedule, filenames sanitized.</li>
+      <li>Shows success summary with file count.</li>
+    </ol>
+
+    <h4>Excel Output Quality</h4>
+    <table class="data-table" style="margin:0.5rem 0 1rem 0;">
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th>Detail</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Title row</td>
+          <td>Merged across all columns, height 30, bold navy</td>
+        </tr>
+        <tr>
+          <td>Header row</td>
+          <td>Bold white text on dark navy (#1F4E79) background, frozen</td>
+        </tr>
+        <tr>
+          <td>Data rows</td>
+          <td>Alternating white / light blue (#F2F7FB)</td>
+        </tr>
+        <tr>
+          <td>Column types</td>
+          <td>Auto-detected: Int (#,##0), Decimal (#,##0.00), Percentage (0%), Text</td>
+        </tr>
+        <tr>
+          <td>Summary rows</td>
+          <td>Subtotals (medium navy border) and grand totals (bold navy text) detected automatically</td>
+        </tr>
+        <tr>
+          <td>Print setup</td>
+          <td>Landscape, 1" margins, fit to 1 page wide, frozen header repeats on print</td>
+        </tr>
+        <tr>
+          <td>RTL support</td>
+          <td>Reading order = 2 (Hebrew right-to-left)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/ExportScheduleToExcelHandler.cs</span>
+      <span class="key-file">Services/ScheduleExcelExportService.cs</span>
+      <span class="key-file">Views/SchedulePickerWindow.xaml</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box tip">
+        <span class="info-label">Resilience</span>
+        <div class="info-text">
+          In separate-files mode, per-schedule errors are caught and logged without
+          aborting the rest. Summary shows "X of Y exported successfully."
+        </div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">27 Cell Styles</span>
+        <div class="info-text">
+          The export service defines 27 OpenXml styles covering all combinations of
+          row type (normal/alt/subtotal/grand) &times; column type (int/dec/pct/text).
+          Decimal zeros render in gray text for subtlety.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 4.2 EDIT IN EXCEL ──────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Edit In Excel</span>
+      <span class="cmd-ribbon">Ribbon: Schedules &rarr; Edit In Excel</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Full roundtrip: exports a schedule to a temp Excel file, opens it for editing,
+      waits for the user to save and close, then imports changes back into Revit.
+      Writable cells have white backgrounds; read-only cells are grayed out.
+    </p>
+
+    <div class="diagram-wrap">
+      <div class="diagram-title">Edit In Excel &mdash; Roundtrip Flow</div>
+      <div class="mermaid">
+graph LR
+  A["Export schedule\nto temp .xlsx"] --> B["Open in Excel\n(Process.Start)"]
+  B --> C["User edits\nwhite cells"]
+  C --> D["User saves &\ncloses Excel"]
+  D --> E["Click 'Import\nChanges' in Revit"]
+  E --> F["Read Excel,\ncompare values"]
+  F --> G["Apply changes\nto elements"]
+  G --> H["Show results:\nupdated/skipped/failed"]
+
+  style A fill:#1e3a5f,color:#fff
+  style E fill:#7c3aed,color:#fff
+  style G fill:#166534,color:#fff
+      </div>
+    </div>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>If active view is a schedule, it's used directly. Otherwise, schedule picker opens (single-select).</li>
+      <li>Schedule exported to temp file: <code>%TEMP%\BimTasksV2_{name}_{timestamp}.xlsx</code></li>
+      <li>Excel opens automatically via shell association.</li>
+      <li>Revit shows a confirmation dialog: "Edit, save, close Excel, then click Import Changes."</li>
+      <li>On Import: reads Excel back, compares each cell to current Revit value.</li>
+      <li>Changed cells update the element's parameter (instance or type parameter).</li>
+      <li>Results summary: updated cells, unchanged (skipped), failed, affected elements.</li>
+      <li>Temp file deleted (best-effort).</li>
+    </ol>
+
+    <h4>How Element Tracking Works</h4>
+    <p style="font-size:0.88rem; color:#374151;">
+      The roundtrip service writes a <strong>hidden column A</strong> containing comma-separated
+      <code>ElementId</code> values for each row. On import, it reads column A to find the
+      exact elements to update. For itemized schedules, rows map 1:1 to elements. For grouped
+      schedules, an element signature (pipe-delimited field values) groups elements by their
+      shared properties.
+    </p>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/EditScheduleInExcelHandler.cs</span>
+      <span class="key-file">Services/ScheduleExcelRoundtripService.cs</span>
+      <span class="key-file">Views/SchedulePickerWindow.xaml</span>
+    </div>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">No Verification That Excel Was Saved</div>
+      <div class="improve-body">
+        <p>The handler trusts the user to save and close Excel before clicking "Import Changes."
+        If the user forgot to save, the import reads the last-saved state (or the original export).
+        There's no timeout, no file-modification check, and no warning if the file hasn't changed.</p>
+      </div>
+    </div>
+    <div class="improve-card">
+      <div class="improve-title">Process.Start Without Error Handling</div>
+      <div class="improve-body">
+        <p><code>Process.Start()</code> with <code>UseShellExecute = true</code> will throw if
+        Excel (or any <code>.xlsx</code> handler) is not installed. This exception is not
+        specifically caught &mdash; it falls through to the generic error handler.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── 4.3 IMPORT KEY SCHEDULES ───────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Import Key Schedules</span>
+      <span class="cmd-ribbon">Ribbon: Schedules &rarr; Import Key Schedules</span>
+    </div>
+    <span class="status status-sketchy">Sketchy</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Imports key schedule data from an Excel file into 4 Revit key schedules
+      (Walls, Floors, Structural Columns, Structural Framing). Creates the key schedules
+      if they don't exist. Each row in Excel becomes a key entry with 5 fields:
+      KeyName, ItemNumber, Description, Price, Subcontractor.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Import Key Schedules</strong>.</li>
+      <li>Open file dialog &rarr; select <code>.xlsx</code> file.</li>
+      <li>Reads first worksheet, starting at row 2 (row 1 = header). 5 columns: KeyName, ItemNumber, Description, Price, Subcontractor.</li>
+      <li>For each of 4 target categories:
+        <ul>
+          <li>Finds or creates <code>BIMTasks_Key_{Category}</code> schedule.</li>
+          <li>Ensures all parameter fields exist on the schedule.</li>
+          <li>For each Excel row: finds existing key element by name or inserts new row.</li>
+          <li>Sets all 5 parameters on the element.</li>
+        </ul>
+      </li>
+      <li>Shows success dialog.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/ImportKeySchedulesFromExcelHandler.cs</span>
+    </div>
+
+    <div class="issue-card" style="margin-top:1rem;">
+      <div class="issue-title">No Excel Format Validation</div>
+      <div class="issue-body">
+        <p>Assumes the Excel file has exactly 5 columns in a specific order. No header
+        validation, no column count check. If the user opens a differently structured file,
+        data will be silently misassigned (e.g., Description written to Price column).</p>
+      </div>
+    </div>
+    <div class="issue-card">
+      <div class="issue-title">Silent Price Parse Failure</div>
+      <div class="issue-body">
+        <p>Price column is parsed with <code>double.TryParse()</code> &mdash; non-numeric values
+        silently default to 0. No warning shown to the user that pricing data was lost.</p>
+      </div>
+    </div>
+    <div class="improve-card">
+      <div class="improve-title">No Duplicate Key Detection</div>
+      <div class="improve-body">
+        <p>If two Excel rows have the same KeyName, both will be processed. The second row
+        overwrites the first without warning. Should either merge, skip, or warn.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     SHARED UI — SCHEDULE PICKER
+     ══════════════════════════════════════════════════════════ -->
+<section class="section" style="margin-top:2rem;">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Shared UI &mdash; Schedule Picker</div>
+    </div>
+  </div>
+
+  <p style="font-size:0.88rem; color:#374151; margin-bottom:1rem;">
+    All three commands use <code>SchedulePickerWindow</code>, a reusable WPF dialog
+    with two modes:
+  </p>
+
+  <div class="info-row">
+    <div class="info-box note">
+      <span class="info-label">Single-Select Mode</span>
+      <div class="info-text">
+        Used by Edit In Excel and Import Key Schedules. One schedule at a time.
+        Double-click to confirm. No export mode radio buttons.
+      </div>
+    </div>
+    <div class="info-box note">
+      <span class="info-label">Multi-Select Mode</span>
+      <div class="info-text">
+        Used by Export Schedule. Ctrl+Click for multiple. Shows radio buttons:
+        "One Excel file" (multiple sheets) vs. "Separate Excel files" (one per schedule).
+      </div>
+    </div>
+  </div>
+
+  <p style="font-size:0.88rem; color:#374151; margin-top:1rem;">
+    Both modes include a real-time search box that filters the schedule list by name (case-insensitive).
+    Schedules are sorted alphabetically.
+  </p>
+
+  <div class="key-files" style="margin-top:0.5rem;">
+    <span class="key-file">Views/SchedulePickerWindow.xaml</span>
+    <span class="key-file">Views/SchedulePickerWindow.xaml.cs</span>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     CHAPTER SUMMARY
+     ══════════════════════════════════════════════════════════ -->
+<section class="section" style="margin-top:2rem;">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Schedules &mdash; Summary</div>
+    </div>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Command</th>
+        <th>Direction</th>
+        <th>UI</th>
+        <th>Transactions</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Export Schedule</td>
+        <td>Revit &rarr; Excel (one-way)</td>
+        <td>Multi-select picker + Save/Folder dialog</td>
+        <td>None</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Edit In Excel</td>
+        <td>Revit &harr; Excel (roundtrip)</td>
+        <td>Single-select picker + Excel + confirm dialog</td>
+        <td>1 (import)</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Import Key Schedules</td>
+        <td>Excel &rarr; Revit (one-way)</td>
+        <td>Open file dialog</td>
+        <td>1 (batch)</td>
+        <td><span class="status status-sketchy">Sketchy</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:1.5rem;">
+    <div style="font-weight:700; font-size:0.9rem; color:#1e3a5f; margin-bottom:0.75rem;">Cross-Cutting Observations</div>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>Export quality is professional-grade</strong> &mdash; 27 cell styles, auto-detected
+      column types, summary row classification, RTL support, and print-ready layout. This is
+      well above typical Revit add-in export quality.</li>
+      <li><strong>Roundtrip editing is clever</strong> &mdash; hidden ElementId column + writable/read-only
+      field analysis + element signature matching. The complexity is justified by the use case.</li>
+      <li><strong>Key schedule import is the weakest link</strong> &mdash; no format validation,
+      silent data loss on parse failures, and no duplicate detection. Needs hardening before
+      relying on it for production data.</li>
+      <li><strong>Two separate export services</strong> exist:
+      <code>ScheduleExcelExportService</code> (presentation-grade, one-way) and
+      <code>ScheduleExcelRoundtripService</code> (element-tracked, bidirectional).
+      They share no code but serve distinct purposes.</li>
+    </ul>
+  </div>
+</section>
+
+</div><!-- /container -->
+</body>
+</html>

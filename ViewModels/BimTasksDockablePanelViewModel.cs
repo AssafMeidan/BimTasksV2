@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows;
 using System.Windows.Input;
 using BimTasksV2.Events;
+using BimTasksV2.Services;
 using Prism.Commands;
 using Prism.Events;
 using Prism.Ioc;
@@ -12,111 +14,233 @@ using Serilog;
 
 namespace BimTasksV2.ViewModels
 {
-    public class DockableTabItem : BindableBase
+    public class TabInfo : BindableBase
     {
         public string Key { get; set; } = "";
-        public string Title { get; set; } = "";
-        public FrameworkElement? Content { get; set; }
+        public string DisplayName { get; set; } = "";
+        public bool CanClose { get; set; }
+        public Action? CloseAction { get; set; }
+
+        private bool _isActive;
+        public bool IsActive
+        {
+            get => _isActive;
+            set => SetProperty(ref _isActive, value);
+        }
     }
 
     /// <summary>
     /// ViewModel for the BimTasks dockable panel.
-    /// Manages a collection of tabs, each hosting a different view.
-    /// Re-opening an existing view activates its tab instead of creating a duplicate.
+    /// Subscribes to SwitchDockablePanelEvent and swaps the CurrentView content
+    /// based on the view key (e.g. "FilterTree", "ElementCalculation").
+    /// Also hosts the toolbar button groups inline.
     /// </summary>
     public class BimTasksDockablePanelViewModel : BindableBase
     {
-        public ObservableCollection<DockableTabItem> Tabs { get; } = new();
+        // Lazy-resolved: ICommandDispatcherService is registered in OnFirstIdle(),
+        // but the panel is created during OnStartup() — before the service exists.
+        private ICommandDispatcherService? _dispatcher;
+        private ICommandDispatcherService Dispatcher =>
+            _dispatcher ??= BimTasksV2.Infrastructure.ContainerLocator.Container
+                .Resolve<ICommandDispatcherService>();
 
-        private DockableTabItem? _selectedTab;
-        public DockableTabItem? SelectedTab
+        private readonly Dictionary<string, FrameworkElement> _viewCache = new();
+        private readonly Dictionary<string, string> _viewDisplayNames = new()
         {
-            get => _selectedTab;
+            ["FilterTree"] = "Filter Tree",
+            ["ElementCalculation"] = "Calculations",
+            ["TrimCorners"] = "Trim Corners",
+            ["ColorSwatch"] = "Color Swatch",
+        };
+
+        private string _panelTitle = "BimTasks Panel";
+        public string PanelTitle
+        {
+            get => _panelTitle;
+            set => SetProperty(ref _panelTitle, value);
+        }
+
+        private FrameworkElement? _currentView;
+        public FrameworkElement? CurrentView
+        {
+            get => _currentView;
             set
             {
-                SetProperty(ref _selectedTab, value);
+                SetProperty(ref _currentView, value);
                 RaisePropertyChanged(nameof(EmptyStateVisibility));
             }
         }
 
-        public Visibility EmptyStateVisibility =>
-            Tabs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        public System.Windows.Visibility EmptyStateVisibility =>
+            _currentView == null ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
 
-        public ICommand CloseTabCommand { get; }
+        public System.Windows.Visibility TabStripVisibility =>
+            Tabs.Count > 1 ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+
+        public ObservableCollection<TabInfo> Tabs { get; } = new();
+        public DelegateCommand<string> SwitchTabCommand { get; }
+        public DelegateCommand<string> CloseTabCommand { get; }
+
+        public ObservableCollection<ToolbarGroupInfo> ToolbarGroups { get; }
+        public DelegateCommand<string> ExecuteToolbarCommand { get; }
 
         public BimTasksDockablePanelViewModel()
         {
-            CloseTabCommand = new DelegateCommand<DockableTabItem>(OnCloseTab);
+            ToolbarGroups = FloatingToolbarViewModel.BuildToolbarGroups();
+            ExecuteToolbarCommand = new DelegateCommand<string>(OnExecuteToolbarCommand);
+            SwitchTabCommand = new DelegateCommand<string>(OnSwitchTab);
+            CloseTabCommand = new DelegateCommand<string>(OnCloseTab);
 
             var eventAgg = BimTasksV2.Infrastructure.ContainerLocator.EventAggregator;
             eventAgg.GetEvent<BimTasksEvents.SwitchDockablePanelEvent>()
                 .Subscribe(OnSwitchContent, ThreadOption.PublisherThread);
         }
 
-        private void OnCloseTab(DockableTabItem? tab)
+        private void OnExecuteToolbarCommand(string? commandKey)
         {
+            if (string.IsNullOrEmpty(commandKey)) return;
+
+            Dispatcher.Enqueue(uiApp =>
+            {
+                try
+                {
+                    var eventAgg = BimTasksV2.Infrastructure.ContainerLocator.EventAggregator;
+
+                    switch (commandKey)
+                    {
+                        case "FilterTree":
+                            eventAgg.GetEvent<BimTasksEvents.SwitchDockablePanelEvent>()
+                                .Publish("FilterTree");
+                            return;
+
+                        case "CalcAreaVolume":
+                            eventAgg.GetEvent<BimTasksEvents.SwitchDockablePanelEvent>()
+                                .Publish("ElementCalculation");
+                            eventAgg.GetEvent<BimTasksEvents.CalculateElementsEvent>()
+                                .Publish(null!);
+                            return;
+                    }
+
+                    string handlerTypeName = $"BimTasksV2.Commands.Handlers.{commandKey}Handler";
+                    var handlerType = typeof(BimTasksDockablePanelViewModel).Assembly.GetType(handlerTypeName);
+
+                    if (handlerType != null)
+                    {
+                        var handler = Activator.CreateInstance(handlerType) as Commands.Infrastructure.ICommandHandler;
+                        handler?.Execute(uiApp);
+                        return;
+                    }
+
+                    Log.Warning("[Toolbar] Command not found: {Key}", commandKey);
+                    Autodesk.Revit.UI.TaskDialog.Show("BimTasks",
+                        $"Command '{commandKey}' is not yet available.");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "[Toolbar] Failed to execute {Key}", commandKey);
+                    Autodesk.Revit.UI.TaskDialog.Show("Error", $"Command failed:\n{ex.Message}");
+                }
+            });
+        }
+
+        private void OnSwitchTab(string? tabKey)
+        {
+            if (string.IsNullOrEmpty(tabKey)) return;
+            if (!_viewCache.ContainsKey(tabKey)) return;
+            ActivateTab(tabKey);
+        }
+
+        private void OnCloseTab(string? tabKey)
+        {
+            if (string.IsNullOrEmpty(tabKey)) return;
+
+            var tab = Tabs.FirstOrDefault(t => t.Key == tabKey);
             if (tab == null) return;
 
-            var index = Tabs.IndexOf(tab);
-            Tabs.Remove(tab);
+            // Run cleanup callback if registered
+            tab.CloseAction?.Invoke();
 
+            _viewCache.Remove(tabKey);
+            Tabs.Remove(tab);
+            RaisePropertyChanged(nameof(TabStripVisibility));
+
+            // Activate another tab or show empty state
             if (Tabs.Count > 0)
             {
-                // Select the tab at the same position, or the last one
-                SelectedTab = Tabs[Math.Min(index, Tabs.Count - 1)];
+                ActivateTab(Tabs.Last().Key);
             }
             else
             {
-                SelectedTab = null;
+                PanelTitle = "BimTasks Panel";
+                CurrentView = null;
             }
+        }
 
-            RaisePropertyChanged(nameof(EmptyStateVisibility));
+        /// <summary>
+        /// Registers a close action for a tab (e.g., clearing Revit overrides).
+        /// Call this from the view/viewmodel that needs cleanup on tab close.
+        /// </summary>
+        public void RegisterTabCloseAction(string tabKey, Action closeAction)
+        {
+            var tab = Tabs.FirstOrDefault(t => t.Key == tabKey);
+            if (tab != null)
+            {
+                tab.CanClose = true;
+                tab.CloseAction = closeAction;
+            }
+        }
+
+        private void ActivateTab(string tabKey)
+        {
+            foreach (var tab in Tabs)
+                tab.IsActive = tab.Key == tabKey;
+
+            var displayName = _viewDisplayNames.TryGetValue(tabKey, out var name) ? name : tabKey;
+            PanelTitle = displayName;
+            CurrentView = _viewCache[tabKey];
         }
 
         private void OnSwitchContent(string viewKey)
         {
             try
             {
-                // If tab already exists for this view key, just activate it
-                var existing = Tabs.FirstOrDefault(t => t.Key == viewKey);
-                if (existing != null)
+                // If already cached, just activate
+                if (_viewCache.ContainsKey(viewKey))
                 {
-                    SelectedTab = existing;
+                    ActivateTab(viewKey);
                     return;
                 }
 
+                // Create the view
                 var container = BimTasksV2.Infrastructure.ContainerLocator.Container;
-                string title;
-                FrameworkElement? view;
+                FrameworkElement? view = null;
 
                 switch (viewKey)
                 {
                     case "FilterTree":
-                        title = "Filter Tree";
                         view = container.Resolve<Views.FilterTreeView>();
                         break;
 
                     case "ElementCalculation":
-                        title = "Element Calculations";
                         view = container.Resolve<Views.ElementCalculationView>();
                         break;
 
-                    case "FixSplitCorners":
-                        title = "Fix Split Corners";
-                        view = container.Resolve<Views.FixSplitCornersView>();
+                    case "TrimCorners":
+                        view = container.Resolve<Views.TrimCornersView>();
                         break;
 
-                    case "ColorCodeByParameter":
-                        title = "Color Code by Parameter";
-                        view = container.Resolve<Views.ColorCodeByParameterView>();
+                    case "ColorSwatch":
+                        var colorSwatchView = new Views.ColorSwatchView();
+                        view = colorSwatchView;
                         break;
 
                     default:
                         var viewType = Type.GetType($"BimTasksV2.Views.{viewKey}View");
                         if (viewType != null)
                         {
-                            title = viewKey;
                             view = container.Resolve(viewType) as FrameworkElement;
+                            if (!_viewDisplayNames.ContainsKey(viewKey))
+                                _viewDisplayNames[viewKey] = viewKey;
                         }
                         else
                         {
@@ -128,16 +252,19 @@ namespace BimTasksV2.ViewModels
 
                 if (view == null) return;
 
-                var tab = new DockableTabItem
+                // Cache and create tab
+                _viewCache[viewKey] = view;
+
+                var displayName = _viewDisplayNames.TryGetValue(viewKey, out var dn) ? dn : viewKey;
+                Tabs.Add(new TabInfo
                 {
                     Key = viewKey,
-                    Title = title,
-                    Content = view
-                };
+                    DisplayName = displayName,
+                    CanClose = false,
+                });
+                RaisePropertyChanged(nameof(TabStripVisibility));
 
-                Tabs.Add(tab);
-                SelectedTab = tab;
-                RaisePropertyChanged(nameof(EmptyStateVisibility));
+                ActivateTab(viewKey);
             }
             catch (Exception ex)
             {

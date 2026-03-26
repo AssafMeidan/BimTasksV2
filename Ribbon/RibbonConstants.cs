@@ -256,6 +256,18 @@ namespace BimTasksV2.Ribbon
                 "Color\nCode",
                 "BimTasksV2.Commands.Proxies.ColorCodeByParameterCommand",
                 "Color-code elements in the view by any parameter value with a clickable legend"),
+
+            new ButtonDef(
+                "btnFilterToLegend",
+                "Filter Legend\nDrafting",
+                "BimTasksV2.Commands.Proxies.FilterToLegendCommand",
+                "Create legend drafting from view filters"),
+
+            new ButtonDef(
+                "btnColorSwatch",
+                "Color\nSwatch",
+                "BimTasksV2.Commands.Proxies.ColorSwatchCommand",
+                "Temporary element coloring with interactive legend"),
         };
 
         /// <summary>

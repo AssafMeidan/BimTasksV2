@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>6 — Tools | BimTasksV2 Guide</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<div class="container">
+
+<!-- ══════════════════════════════════════════════════════════
+     SECTION 6 — TOOLS
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-header">
+    <span class="section-num">6</span>
+    <div>
+      <div class="section-title">Tools</div>
+      <div class="section-desc">13 commands &mdash; panels, filters, DWG floors, export, voice, utilities</div>
+    </div>
+  </div>
+
+  <p style="font-size:0.88rem; color:#374151; margin-bottom:1rem;">
+    The Tools panel is the largest and most diverse. It contains panel toggles, filter/classification
+    utilities, DWG-to-Revit workflows, a JSON data exporter for the BIM Israel web app,
+    voice control, and element creation tools. Several commands are pure event publishers
+    that switch the dockable panel's content view.
+  </p>
+
+  <div class="callout">
+    <div class="callout-title">Event-Based Panel Switching</div>
+    <div class="callout-body">
+      Commands like Filter Tree, Calc Area, and Floating Toolbar don't run transactions.
+      They publish Prism events (<code>SwitchDockablePanelEvent</code>, <code>ToggleFloatingToolbarEvent</code>)
+      that the dockable panel ViewModel handles by swapping its active content view.
+    </div>
+  </div>
+</section>
+
+<!-- ── 6.1 FILTER TREE ────────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Filter Tree</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Filter Tree</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Opens the dockable panel and switches to <code>FilterTreeView</code>. Builds a hierarchical
+      tree of element categories, families, types, and parameter values from the active view
+      or current selection. Used for quick element filtering and inspection.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Filter Tree</strong>.</li>
+      <li>Updates <code>IRevitContextService</code> with active document.</li>
+      <li>Publishes <code>SwitchDockablePanelEvent("FilterTree")</code> &rarr; dockable panel swaps content.</li>
+      <li>Publishes <code>ResetFilterTreeEvent</code> &rarr; <code>FilterTreeViewModel</code> rebuilds tree.</li>
+      <li>Dockable pane shown if hidden.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/ShowFilterTreeWindowHandler.cs</span>
+      <span class="key-file">ViewModels/FilterTreeViewModel.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">No Transaction</span>
+        <div class="info-text">Pure event publisher &mdash; no model modifications.</div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">Synchronous Event</span>
+        <div class="info-text">
+          <code>ResetFilterTreeEvent</code> uses <code>ThreadOption.PublisherThread</code> (synchronous).
+          Tree load must complete before control returns to Revit.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 6.2 CALC AREA & VOLUME ─────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Calc Area &amp; Volume</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Calc Area &amp; Volume</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Switches the dockable panel to <code>ElementCalculationView</code> and calculates
+      area, volume, and count for selected elements across 10+ categories.
+      Includes material breakdown (concrete, steel, etc.) and special stair handling.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Calc Area &amp; Volume</strong>.</li>
+      <li>Publishes <code>SwitchDockablePanelEvent("ElementCalculation")</code>.</li>
+      <li>Publishes <code>CalculateElementsEvent</code> &rarr; <code>ElementCalculationViewModel</code> recalculates.</li>
+      <li>Results displayed in dockable panel: counts + area (m&sup2;) + volume (m&sup3;) per category.</li>
+    </ol>
+
+    <h4>Supported Categories</h4>
+    <p style="font-size:0.88rem; color:#374151;">
+      Walls, Floors, Beams, Columns, Foundations, Stairs (with tread/landing breakdown),
+      Railings, Doors, Windows. Material breakdown for concrete/steel elements.
+    </p>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/CheckSelectedWallsAreaAndVolumeHandler.cs</span>
+      <span class="key-file">Services/ElementCalculationService.cs</span>
+      <span class="key-file">ViewModels/ElementCalculationViewModel.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">No Transaction</span>
+        <div class="info-text">Read-only geometry extraction. No model changes.</div>
+      </div>
+      <div class="info-box tip">
+        <span class="info-label">Clipboard</span>
+        <div class="info-text">
+          ViewModel exposes <code>CopyToClipboardCommand</code> for easy pasting into Excel/reports.
+        </div>
+      </div>
+    </div>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Recalculates on Every Invocation</div>
+      <div class="improve-body">
+        <p><code>ElementCalculationService</code> (~828 lines) reads geometry for all selected elements
+        on every call. No caching &mdash; selecting 1,000+ elements will block the UI
+        while calculations run.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 6.3 UNIFORMAT CODES ────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Uniformat Codes</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Uniformat Codes</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Opens a modeless window with a hierarchical Uniformat classification tree loaded from CSV.
+      User can browse codes, search by name or number, and assign Uniformat codes
+      to selected Revit elements.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Uniformat Codes</strong>.</li>
+      <li>Resolves <code>UniformatWindowView</code> from DI container (ViewModelLocator auto-wires ViewModel).</li>
+      <li>Window opens modeless (non-blocking).</li>
+      <li>User browses/searches the Uniformat tree and assigns codes to elements.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/ShowUniformatWindowHandler.cs</span>
+      <span class="key-file">Services/UniformatDataService.cs</span>
+      <span class="key-file">Views/UniformatWindowView.xaml</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">CSV Format</span>
+        <div class="info-text">
+          Expects columns: <code>RevitAssemblyCode</code>, <code>UniformatName</code>,
+          <code>Level</code>, <code>Root</code>, <code>Depth</code>, <code>BuiltInCatHint</code>.
+        </div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">Modeless</span>
+        <div class="info-text">Window stays open alongside Revit &mdash; doesn't block other commands.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 6.4 COPY FROM LINK ─────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Copy From Link</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Copy From Link</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Copies elements from a linked model into the active document. Shows a cascading
+      selector dialog (Link &rarr; Category &rarr; Family &rarr; Type) and copies all matching
+      elements with their link transform applied.
+    </p>
+
+    <div class="diagram-wrap">
+      <div class="diagram-title">Copy From Link &mdash; Batch Strategy</div>
+      <div class="mermaid">
+graph TD
+  A["User selects:\nLink → Category → Family → Type"] --> B["Batch copy\n(all at once)"]
+  B --> C{"Success?"}
+  C -->|Yes| D["Select copied\nelements"]
+  C -->|No| E["Fallback:\nchunked copy\n(20 per batch)"]
+  E --> F{"5 consecutive\nfailures?"}
+  F -->|No| G["Continue with\nnext chunk"]
+  F -->|Yes| H["Abort remaining\nchunks"]
+  G --> D
+  H --> D
+
+  style A fill:#1e3a5f,color:#fff
+  style B fill:#7c3aed,color:#fff
+  style D fill:#166534,color:#fff
+  style H fill:#9a3412,color:#fff
+      </div>
+    </div>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Copy From Link</strong>.</li>
+      <li><code>CopyCategoryFromLinkView</code> dialog opens with cascading dropdowns.</li>
+      <li>Select link, category (or &lt;All&gt;), family (or &lt;All&gt;), type (or &lt;All&gt;).</li>
+      <li>Handler attempts batch copy via <code>ElementTransformUtils.CopyElements()</code>.</li>
+      <li>If batch fails, falls back to chunked copy (20 elements/batch, max 5 consecutive failures).</li>
+      <li>Copied elements selected in active view. Results dialog shows count.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/CopyCategoryFromLinkHandler.cs</span>
+      <span class="key-file">Views/CopyCategoryFromLinkView.xaml</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Type Conflicts</span>
+        <div class="info-text">
+          <code>UseDestinationTypesHandler</code> resolves duplicate type names by
+          reusing the destination document's types. Source types with different
+          properties but matching names will use destination definitions.
+        </div>
+      </div>
+      <div class="info-box tip">
+        <span class="info-label">Transform</span>
+        <div class="info-text">
+          All copied elements are transformed by the link's total placement transform,
+          so they land in the correct world-space position.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── 6.5 DOCKABLE PANEL ─────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Dockable Panel</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Dockable Panel</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Toggles visibility of the main BimTasks dockable panel. The panel hosts
+      multiple content views (Filter Tree, Element Calculation, etc.) that other
+      commands switch between.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Dockable Panel</strong>.</li>
+      <li>Resolves dockable pane via <code>uiApp.GetDockablePane(BimTasksBootstrapper.DockablePaneId)</code>.</li>
+      <li>If shown &rarr; hide. If hidden &rarr; show.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/ToggleDockablePanelHandler.cs</span>
+      <span class="key-file">Views/BimTasksDockablePanel.xaml</span>
+      <span class="key-file">ViewModels/BimTasksDockablePanelViewModel.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">ALC Context</span>
+        <div class="info-text">
+          Uses <code>BimTasksBootstrapper.DockablePaneId</code> (isolated ALC), not
+          <code>BimTasksApp.DockablePaneId</code> (default ALC). ID must match the one
+          used during <code>RegisterDockablePane()</code> in startup.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 6.6 FLOATING TOOLBAR ───────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Floating Toolbar</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Floating Toolbar</span>
+    </div>
+    <span class="status status-broken">Broken</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Publishes <code>ToggleFloatingToolbarEvent</code> to show/hide a modeless floating
+      toolbar window with grouped command buttons. The toolbar window uses a singleton
+      pattern (hides on close instead of disposing).
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Floating Toolbar</strong>.</li>
+      <li>Publishes <code>ToggleFloatingToolbarEvent</code>.</li>
+      <li><code>FloatingToolbarViewModel</code> handles the event and toggles window visibility.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/ToggleToolbarHandler.cs</span>
+      <span class="key-file">ViewModels/FloatingToolbarViewModel.cs</span>
+      <span class="key-file">Views/FloatingToolbarWindow.xaml</span>
+    </div>
+
+    <div class="issue-card" style="margin-top:1rem;">
+      <div class="issue-title">Not Working &mdash; Needs Debugging</div>
+      <div class="issue-body">
+        <p>The floating toolbar is currently non-functional. The exact failure mode has
+        not been diagnosed. Likely related to the toolbar window lifecycle, event
+        subscription timing, or ALC isolation issues with the singleton window pattern.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 6.7 EXPORT JSON ────────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Export JSON</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Export JSON</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Exports all model elements to JSON for the BIM Israel web application.
+      Extracts geometry, parameters, BOQ data, and Uniformat codes for 40+ categories.
+      Validates the export against Revit schedules and generates a discrepancy report.
+    </p>
+
+    <div class="diagram-wrap">
+      <div class="diagram-title">Export JSON &mdash; Pipeline</div>
+      <div class="mermaid">
+graph LR
+  A["Ensure validation\nschedules exist"] --> B["User picks\nsave location"]
+  B --> C["Extract elements\n(40+ categories)"]
+  C --> D["Save elements.json\n+ validation.json"]
+  D --> E["Compare export\nvs Revit schedules"]
+  E --> F{"Discrepancies?"}
+  F -->|None| G["✓ All verified"]
+  F -->|Found| H["⚠ Show\ndiscrepancy report"]
+
+  style A fill:#1e3a5f,color:#fff
+  style C fill:#7c3aed,color:#fff
+  style G fill:#166534,color:#fff
+  style H fill:#9a3412,color:#fff
+      </div>
+    </div>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Export JSON</strong>.</li>
+      <li>Creates <code>BIM_Validation_*</code> schedules if missing (for post-export comparison).</li>
+      <li>Save dialog &rarr; default name: <code>{title}_{timestamp}.json</code>.</li>
+      <li>Extracts all elements from active view, filtered by view phase.</li>
+      <li>Generates validation summary (counts + totals by category/family).</li>
+      <li>Saves elements JSON + validation JSON.</li>
+      <li>Compares export against Revit schedule totals (tolerance: 0.1 m&sup3;).</li>
+      <li>Shows results: verified count, discrepancies (top 5 by family), category breakdown.</li>
+    </ol>
+
+    <h4>Export Content</h4>
+    <p style="font-size:0.88rem; color:#374151;">
+      Each element in the JSON includes: <code>Id</code>, <code>Category</code>,
+      <code>FamilyName</code>, <code>TypeName</code>, <code>Level</code>,
+      <code>Volume</code> (m&sup3;), <code>Area</code> (m&sup2;), <code>Length</code> (m),
+      <code>BoqCode</code>, <code>Zone</code>, <code>WorkStage</code>,
+      <code>SeifChoze</code>, <code>SubcontractorName</code>, and more.
+      Uses <code>System.Text.Json</code> with <code>UnsafeRelaxedJsonEscaping</code>
+      for Hebrew character support.
+    </p>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/WebAppDataExtractorHandler.cs</span>
+      <span class="key-file">Services/DataExtractorService.cs</span>
+      <span class="key-file">Models/BimElementDto.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">No Transaction</span>
+        <div class="info-text">Read-only export. Schedule creation is the only modification (if needed).</div>
+      </div>
+      <div class="info-box tip">
+        <span class="info-label">Validation</span>
+        <div class="info-text">
+          Compares export counts/volumes against Revit validation schedules.
+          Stair runs/landings are excluded from comparison (calculated in parent).
+        </div>
+      </div>
+    </div>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Hardcoded Category Mappings</div>
+      <div class="improve-body">
+        <p>24 category-to-schedule-name mappings are hardcoded in the handler.
+        If validation schedule names differ from expected, comparison silently
+        skips those categories.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 6.8 VOICE CONTROL ──────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Voice Control</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Voice Control</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Toggles Vosk offline speech recognition on/off. When active, spoken commands
+      (e.g., "wall", "door", "copy", "undo", "section") trigger Revit actions.
+      Uses grammar-constrained recognition via NAudio microphone input.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Voice Control</strong>.</li>
+      <li>Resolves <code>IVoskVoiceService</code> from DI.</li>
+      <li>Calls <code>voiceService.Toggle()</code> &mdash; starts or stops recognition.</li>
+      <li>Shows status: started (with command list), stopped, or not available.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/ToggleVoskVoiceRecognitionHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Dependencies</span>
+        <div class="info-text">
+          Requires Vosk + NAudio packages and a Vosk language model directory.
+          If missing, shows "not available" message.
+        </div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">Offline</span>
+        <div class="info-text">All recognition runs locally &mdash; no internet required.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── 6.9 FILTER TO LEGEND ───────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Filter to Legend Drafting</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Filter Legend Drafting</span>
+    </div>
+    <span class="status status-needs-improvement">Needs Improvement</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Collects view filters with color overrides from the active view, then creates
+      a drafting view legend with color swatches and filter names. Can also update
+      an existing legend. Handles the notorious view-scale coordinate gotcha.
+    </p>
+
+    <div class="diagram-wrap">
+      <div class="diagram-title">Filter to Legend &mdash; Flow</div>
+      <div class="mermaid">
+graph TD
+  A["Collect view filters\nwith color overrides"] --> B["Find existing\nlegend views"]
+  B --> C["Show dialog:\nselect filters + mode"]
+  C --> D{"Create new\nor update?"}
+  D -->|Create| E["Create drafting view\n(or duplicate legend)"]
+  D -->|Update| F["Clear existing\nview elements"]
+  E --> G["Draw color swatches\n(FilledRegion)"]
+  F --> G
+  G --> H["Place filter name\ntext (TextNote)"]
+  H --> I["Switch to\nlegend view"]
+
+  style A fill:#1e3a5f,color:#fff
+  style C fill:#7c3aed,color:#fff
+  style G fill:#166534,color:#fff
+      </div>
+    </div>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Filter Legend Drafting</strong>.</li>
+      <li>Handler collects all filters on the active view with valid color overrides (surface foreground, then cut foreground fallback).</li>
+      <li><code>FilterToLegendDialog</code> opens: filter checklist with color swatches, reorder buttons, create/update mode selector.</li>
+      <li>User selects filters and mode.</li>
+      <li><strong>Create:</strong> <code>LegendBuilder.CreateLegend()</code> creates a new drafting view (or duplicates an existing "empty" legend).</li>
+      <li><strong>Update:</strong> <code>LegendBuilder.UpdateLegend()</code> clears all elements from target view first.</li>
+      <li>Draws color swatches as <code>FilledRegion</code> elements (12&times;6mm, <code>IsMasking = false</code>).</li>
+      <li>Places filter names as <code>TextNote</code> elements (2.5mm text, 4mm gap from swatch).</li>
+      <li>Switches active view to the new/updated legend.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/FilterToLegendHandler.cs</span>
+      <span class="key-file">Helpers/LegendBuilder.cs</span>
+      <span class="key-file">Views/FilterToLegendDialog.xaml</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">TransactionGroup</span>
+        <div class="info-text">
+          Wraps view creation + population in a <code>TransactionGroup</code> with
+          <code>Assimilate()</code> for single undo.
+        </div>
+      </div>
+      <div class="info-box tip">
+        <span class="info-label">View Scale Fix</span>
+        <div class="info-text">
+          All coordinates multiplied by <code>view.Scale</code> &mdash; Revit internally
+          divides by scale, so swatch positions must compensate. This was a
+          common source of bugs (all elements at same point).
+        </div>
+      </div>
+    </div>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Not Yet Deployed or Tested</div>
+      <div class="improve-body">
+        <p>The view scale fix has been applied in code but has not been deployed to
+        a live Revit session for testing. The fix is theoretically correct but
+        needs validation with different view scales.</p>
+      </div>
+    </div>
+    <div class="improve-card">
+      <div class="improve-title">Hardcoded Swatch Dimensions</div>
+      <div class="improve-body">
+        <p>Swatch size (12&times;6mm), row pitch (12mm), text-to-swatch gap (4mm), and text
+        height (2.5mm) are all hardcoded constants. Works well for typical legends
+        but not configurable for different scales or layouts.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 6.10 DETECT OVERLAPPING WALLS ──────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Detect Overlapping Walls</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Detect Overlaps</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Finds same-type walls occupying nearly the same physical space (stacked duplicates).
+      Uses a 2-stage detection: 2D pre-filter (parallel check, perpendicular distance, overlap length)
+      then 3D solid intersection via <code>BooleanOperationsUtils</code>. Shows results
+      with 3 action options.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Detect Overlaps</strong>.</li>
+      <li>Uses selected walls if any, otherwise all walls in active view.</li>
+      <li><code>OverlappingWallsDetector.FindOverlappingWalls()</code> runs 2-stage detection.</li>
+      <li>Results dialog shows groups: overlap %, wall type, wall count, wall to keep (most hosted elements).</li>
+      <li>User chooses action:
+        <ul>
+          <li><strong>Highlight:</strong> Select + temporarily isolate overlapping walls.</li>
+          <li><strong>Unjoin:</strong> Unjoin all geometry joins within groups.</li>
+          <li><strong>Delete Duplicates:</strong> Keep wall with most hosted elements, delete others.</li>
+        </ul>
+      </li>
+    </ol>
+
+    <h4>Detection Thresholds</h4>
+    <table class="data-table" style="margin:0.5rem 0 1rem 0;">
+      <thead>
+        <tr>
+          <th>Threshold</th>
+          <th>Value</th>
+          <th>Purpose</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Angular tolerance</td><td>~1&deg;</td><td>Walls must be parallel</td></tr>
+        <tr><td>Perpendicular distance</td><td>&lt; 50% wall width</td><td>Walls must be close</td></tr>
+        <tr><td>Min overlap length</td><td>50mm</td><td>Prevents endpoint-touching false positives</td></tr>
+        <tr><td>Min overlap %</td><td>&ge; 1%</td><td>Filters near-misses</td></tr>
+        <tr><td>Display threshold</td><td>&ge; 50% width overlap</td><td>Only shows significant overlaps</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/DetectOverlappingWallsHandler.cs</span>
+      <span class="key-file">Helpers/OverlappingWallDetector/OverlappingWallsDetector.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">3D Fallback</span>
+        <div class="info-text">
+          Boolean solid intersection can fail on degenerate geometry. Falls back to
+          2D estimate: <code>(wallWidth - perpDist) / wallWidth &times; 100</code>.
+        </div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">Keep Logic</span>
+        <div class="info-text">
+          Wall with most hosted elements (doors/windows/generics) is kept.
+          Ties broken by oldest ElementId.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 6.11 FLOOR FROM DWG PICK ───────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Floor From DWG Pick</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Floor From DWG Pick</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Interactive single-floor creation: user picks a point on a DWG hatch or edge,
+      the system extracts the face boundary, builds a closed curve loop, and creates
+      a floor element at the selected type and level.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Floor From DWG Pick</strong>.</li>
+      <li>User picks a point on a DWG import (only <code>ImportInstance</code> elements selectable).</li>
+      <li>Extracts face geometry at pick point; falls back to nearest face by centroid.</li>
+      <li>Builds closed <code>CurveLoop</code> from boundary curves (flattens to XY, closes micro-gaps &le; 3mm).</li>
+      <li>Floor type/level selector dialog appears (defaults to active view's level).</li>
+      <li>Creates floor in single transaction.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/PickAndCreateFloorHandler.cs</span>
+      <span class="key-file">Helpers/DwgGeometryExtractor.cs</span>
+      <span class="key-file">Helpers/FloorCreator.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Transaction</span>
+        <div class="info-text">
+          Single transaction: <code>"Create Floor from DWG"</code>. Rolled back if creation fails.
+        </div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">Geometry Fallback</span>
+        <div class="info-text">
+          If <code>GetGeometryObjectFromReference()</code> fails (common with DWG sub-elements),
+          falls back to brute-force nearest face search by centroid distance.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── 6.12 FLOORS FROM DWG ALL ───────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Floors From DWG All</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Floors From DWG All</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Batch floor creation: user picks a DWG import, the system extracts ALL visible
+      floor-sized face boundaries, deduplicates near-duplicates, chains loose curves
+      into closed loops, and creates floors for all valid boundaries.
+    </p>
+
+    <div class="diagram-wrap">
+      <div class="diagram-title">Floors From DWG All &mdash; Pipeline</div>
+      <div class="mermaid">
+graph TD
+  A["Pick DWG import"] --> B["Select floor type\n+ level"]
+  B --> C["Extract all geometry\n(faces + loose curves)"]
+  C --> D["Build CurveLoops\nfrom face boundaries"]
+  C --> E["Chain loose curves\ninto closed loops"]
+  D --> F["Filter: area ≥ 5 m²"]
+  E --> F
+  F --> G["Deduplicate:\ncentroid + area match"]
+  G --> H["Confirm with user:\nvalid / skipped / errors"]
+  H --> I["Create all floors\nin single transaction"]
+
+  style A fill:#1e3a5f,color:#fff
+  style C fill:#7c3aed,color:#fff
+  style G fill:#6d28d9,color:#fff
+  style I fill:#166534,color:#fff
+      </div>
+    </div>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Floors From DWG All</strong>.</li>
+      <li>User picks a DWG <code>ImportInstance</code>.</li>
+      <li>Floor type/level selector dialog.</li>
+      <li>Extracts all geometry: horizontal faces (normal Z &gt; 0.5) + loose curves.</li>
+      <li>Builds CurveLoops from face boundaries; chains loose curves into closed loops.</li>
+      <li>Filters out loops with area &lt; 5 m&sup2;.</li>
+      <li>Deduplicates: centroid within 3mm AND area within 1 sqft &rarr; duplicate.</li>
+      <li>Confirmation dialog with counts (valid, skipped-small, skipped-duplicate, errors).</li>
+      <li>Creates all floors in single transaction. Commits if &ge;1 created; rolls back if all fail.</li>
+    </ol>
+
+    <h4>Configuration Constants</h4>
+    <table class="data-table" style="margin:0.5rem 0 1rem 0;">
+      <thead>
+        <tr>
+          <th>Constant</th>
+          <th>Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Min area</td><td>5.0 m&sup2; (~54 sqft)</td></tr>
+        <tr><td>Closure tolerance</td><td>0.01 ft (~3mm)</td></tr>
+        <tr><td>Chain tolerance</td><td>0.01 ft (~3mm)</td></tr>
+        <tr><td>Dedup tolerance (centroid)</td><td>0.005 ft</td></tr>
+        <tr><td>Dedup tolerance (area)</td><td>1.0 sqft</td></tr>
+        <tr><td>Horizontal normal threshold</td><td>Z &gt; 0.5</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/ImportAllDwgFloorsHandler.cs</span>
+      <span class="key-file">Helpers/DwgGeometryExtractor.cs</span>
+      <span class="key-file">Helpers/FloorCreator.cs</span>
+      <span class="key-file">Helpers/CurveChainer.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Transaction</span>
+        <div class="info-text">Single transaction: <code>"Import DWG Floors"</code>. All-or-nothing if all fail.</div>
+      </div>
+      <div class="info-box tip">
+        <span class="info-label">Error Reporting</span>
+        <div class="info-text">
+          Results dialog shows first 10 error messages with count of remaining.
+          Detailed breakdown: valid, too-small, duplicate, geometry errors.
+        </div>
+      </div>
+    </div>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">No Undo Granularity</div>
+      <div class="improve-body">
+        <p>All floors (potentially 100+) are created in a single transaction.
+        A single undo removes all of them. No way to keep some and discard others
+        without manual deletion after the fact.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 6.13A CREATE SIMILAR ───────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Create Similar</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Create Similar (split button)</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      User picks an element, and the system determines its family type and enters
+      Revit's built-in placement mode for that type. Essentially a "pick to place another" shortcut.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Create Similar</strong>.</li>
+      <li>User picks an element in the view.</li>
+      <li>Handler resolves the element's <code>ElementType</code> via <code>GetTypeId()</code>.</li>
+      <li>Calls <code>uidoc.PostRequestForElementTypePlacement(elementType)</code> &rarr; Revit handles placement UI.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/CreateSelectedItemHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">No Transaction</span>
+        <div class="info-text">Delegates entirely to Revit's built-in placement UI. Revit manages the transaction.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 6.13B PILES FROM DWG ───────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Piles From DWG</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Piles From DWG (split button)</span>
+    </div>
+    <span class="status status-sketchy">Sketchy</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      User picks a DWG import. The system finds all arc elements on the <code>"fnd"</code>
+      (foundation) layer, then places a structural foundation family instance at each
+      arc center with diameter set to the arc diameter.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Piles From DWG</strong>.</li>
+      <li>User picks a DWG import instance.</li>
+      <li><code>DwgWrapper</code> parses arcs on the <code>"fnd"</code> layer.</li>
+      <li>Finds <code>OST_StructuralFoundation</code> family type named <code>"Auto"</code>.</li>
+      <li>For each arc: places <code>NewFamilyInstance()</code> at arc center, sets diameter = arc diameter.</li>
+      <li>Reports total placed count.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/AddClunasFromDwgHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Transaction</span>
+        <div class="info-text">Single transaction: <code>"Place Piles from DWG"</code>. All-or-nothing.</div>
+      </div>
+    </div>
+
+    <div class="issue-card" style="margin-top:1rem;">
+      <div class="issue-title">Hardcoded Family Name &amp; Layer</div>
+      <div class="issue-body">
+        <p>Requires family type named <code>"Auto"</code> in Structural Foundations and
+        DWG arcs on a layer named <code>"fnd"</code>. Both are hardcoded constants.
+        Projects using different naming conventions will get errors.</p>
+      </div>
+    </div>
+    <div class="issue-card">
+      <div class="issue-title">No Diameter Parameter Validation</div>
+      <div class="issue-body">
+        <p>Assumes a <code>"Diameter"</code> parameter exists and is writable on the foundation
+        family. If the parameter doesn't exist, the pile is placed but sized incorrectly
+        with no warning.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     CHAPTER SUMMARY
+     ══════════════════════════════════════════════════════════ -->
+<section class="section" style="margin-top:2rem;">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Tools &mdash; Summary</div>
+    </div>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Command</th>
+        <th>Type</th>
+        <th>Transactions</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Filter Tree</td>
+        <td>Event &rarr; dockable panel</td>
+        <td>None</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Calc Area &amp; Volume</td>
+        <td>Event &rarr; dockable panel</td>
+        <td>None</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Uniformat Codes</td>
+        <td>Modeless window</td>
+        <td>None</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Copy From Link</td>
+        <td>Dialog + batch copy</td>
+        <td>1 (or per-batch)</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Dockable Panel</td>
+        <td>Toggle visibility</td>
+        <td>None</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Floating Toolbar</td>
+        <td>Event &rarr; toggle window</td>
+        <td>None</td>
+        <td><span class="status status-broken">Broken</span></td>
+      </tr>
+      <tr>
+        <td>Export JSON</td>
+        <td>File export + validation</td>
+        <td>None (read-only)</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Voice Control</td>
+        <td>Toggle service</td>
+        <td>None</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Filter to Legend</td>
+        <td>Dialog + create view</td>
+        <td>TransactionGroup</td>
+        <td><span class="status status-needs-improvement">Needs Improvement</span></td>
+      </tr>
+      <tr>
+        <td>Detect Overlaps</td>
+        <td>Dialog + action</td>
+        <td>Per-action</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Floor From DWG Pick</td>
+        <td>Interactive pick + create</td>
+        <td>1</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Floors From DWG All</td>
+        <td>Batch import</td>
+        <td>1 (all-or-nothing)</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Create Similar</td>
+        <td>Pick + Revit placement</td>
+        <td>None (Revit manages)</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Piles From DWG</td>
+        <td>Batch place from arcs</td>
+        <td>1</td>
+        <td><span class="status status-sketchy">Sketchy</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:1.5rem;">
+    <div style="font-weight:700; font-size:0.9rem; color:#1e3a5f; margin-bottom:0.75rem;">Cross-Cutting Observations</div>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>Three command patterns emerge:</strong> (1) event publishers that switch dockable panel
+      content (Filter Tree, Calc Area), (2) dialog-driven workflows with transactions (Copy From Link,
+      Filter to Legend, Detect Overlaps), and (3) interactive pick-and-create tools (Floor DWG, Create Similar, Piles).</li>
+      <li><strong>DWG floor tools are the most robust</strong> &mdash; multi-stage geometry extraction
+      with configurable tolerances, deduplication, curve chaining, and detailed error reporting.
+      The batch variant handles edge cases (small areas, duplicates, geometry errors) gracefully.</li>
+      <li><strong>The floating toolbar is the only broken command</strong> in the entire add-in.
+      All other commands function at least at a "sketchy" level.</li>
+      <li><strong>Export JSON is the most complex command</strong> &mdash; 10-step pipeline with
+      40+ category extraction, validation schedule creation, element-by-element geometry reading,
+      and post-export comparison against Revit schedules. The validation step catches data loss
+      that would otherwise go unnoticed.</li>
+      <li><strong>Piles From DWG is the most fragile</strong> &mdash; hardcoded family name ("Auto"),
+      layer name ("fnd"), and parameter name ("Diameter") make it project-specific with no
+      configurability.</li>
+      <li><strong>Copy From Link has elegant error recovery</strong> &mdash; batch-all attempt with
+      automatic fallback to chunked copy (20/batch) with a 5-failure circuit breaker. This pattern
+      could be applied to other batch operations.</li>
+    </ul>
+  </div>
+</section>
+
+</div><!-- /container -->
+</body>
+</html>

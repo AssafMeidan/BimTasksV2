@@ -30,6 +30,7 @@ namespace BimTasksV2.Infrastructure
     {
         private IContainerExtension _container = null!;
         private VoskVoiceCommandService? _voiceService;
+        private Views.FloatingToolbarWindow? _floatingToolbar;
 
         /// <summary>
         /// DockablePaneId for the BimTasks dockable panel.
@@ -176,6 +177,36 @@ namespace BimTasksV2.Infrastructure
                 Log.Warning(ex, "Failed to create VoskVoiceCommandService (voice commands unavailable)");
             }
 
+            // Subscribe to ToggleFloatingToolbarEvent to show/hide the floating toolbar.
+            var eventAggregator = _container.Resolve<IEventAggregator>();
+            eventAggregator.GetEvent<Events.BimTasksEvents.ToggleFloatingToolbarEvent>()
+                .Subscribe(_ =>
+                {
+                    try
+                    {
+                        if (_floatingToolbar == null)
+                        {
+                            _floatingToolbar = new Views.FloatingToolbarWindow();
+                            Log.Information("[Bootstrapper] Created FloatingToolbarWindow");
+                        }
+
+                        if (_floatingToolbar.IsVisible)
+                        {
+                            _floatingToolbar.Hide();
+                            Log.Information("[Bootstrapper] Floating toolbar hidden");
+                        }
+                        else
+                        {
+                            _floatingToolbar.Show();
+                            Log.Information("[Bootstrapper] Floating toolbar shown");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "[Bootstrapper] Failed to toggle floating toolbar");
+                    }
+                }, ThreadOption.PublisherThread);
+
             Log.Information("BimTasksBootstrapper.OnFirstIdle() completed.");
         }
 
@@ -245,7 +276,7 @@ namespace BimTasksV2.Infrastructure
 
             // Excel services
             registry.RegisterSingleton<ScheduleExcelRoundtripService>();
-            registry.RegisterSingleton<ScheduleExportService>();
+            registry.RegisterSingleton<ScheduleExcelExportService>();
 
             // Floating toolbar service
             registry.RegisterSingleton<FloatingToolbarService>();
@@ -262,8 +293,7 @@ namespace BimTasksV2.Infrastructure
             registry.RegisterForNavigation<Views.ElementCalculationView>();
             registry.RegisterForNavigation<Views.UniformatWindowView>();
             registry.RegisterForNavigation<Views.CopyCategoryFromLinkView>();
-            registry.RegisterForNavigation<Views.FixSplitCornersView>();
-            registry.RegisterForNavigation<Views.ColorCodeByParameterView>();
+            registry.RegisterForNavigation<Views.TrimCornersView>();
         }
 
         #endregion Registration Helpers

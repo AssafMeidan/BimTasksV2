@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
@@ -27,7 +28,8 @@ namespace BimTasksV2.Commands.Handlers
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
         {
             WriteIndented = true,
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         };
 
         public void Execute(UIApplication uiApp)

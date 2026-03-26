@@ -134,7 +134,7 @@ namespace BimTasksV2.ViewModels
                 if (g != null) g.IsExpanded = !g.IsExpanded;
             });
 
-            Groups = BuildGroups();
+            Groups = BuildToolbarGroups();
         }
 
         #region Command Execution
@@ -289,7 +289,7 @@ namespace BimTasksV2.ViewModels
             };
         }
 
-        private static ObservableCollection<ToolbarGroupInfo> BuildGroups()
+        public static ObservableCollection<ToolbarGroupInfo> BuildToolbarGroups()
         {
             return new ObservableCollection<ToolbarGroupInfo>
             {
@@ -308,6 +308,8 @@ namespace BimTasksV2.ViewModels
                         Btn("JoinAllConcreteWallsAndFloorsGeometry",     "Join W+F",   "Join geometry between all concrete walls and floors for clean intersections"),
                         Btn("JoinSelectedBeamsToBlockWalls",             "Join W+B",   "Join geometry of selected beams to adjacent block walls"),
                         Btn("CopyLinkedWalls",                           "Copy Link",  "Copy walls from a linked Revit model into the current project"),
+                        Btn("SplitWall",                                 "Split",      "Split compound wall into layers"),
+                        Btn("TrimWallCorners",                           "Trim Corners", "Trim/extend selected walls to meet at corners"),
                     }
                 },
                 new ToolbarGroupInfo
@@ -351,10 +353,11 @@ namespace BimTasksV2.ViewModels
                     AccentBrush = ToolAccent,
                     Buttons = new ObservableCollection<ToolbarButtonInfo>
                     {
-                        Btn("FilterTree",            "Filter",   "Open hierarchical element filter \u2014 filter by category, parameter, and value"),
-                        Btn("CreateSelectedItem",    "Create",   "Create a new element similar to the currently selected one"),
-                        Btn("CreateWindowFamilies",  "Windows",  "Generate parametric window families from specifications"),
-                        Btn("CopyCategoryFromLink",  "Copy Cat", "Copy elements of a specific category from a linked model"),
+                        Btn("FilterTree",            "Filter",     "Open hierarchical element filter -- filter by category, parameter, and value"),
+                        Btn("CreateSelectedItem",    "Create",     "Create a new element similar to the currently selected one"),
+                        Btn("CreateWindowFamilies",  "Windows",    "Generate parametric window families from specifications"),
+                        Btn("CopyCategoryFromLink",  "Copy Cat",   "Copy elements of a specific category from a linked model"),
+                        Btn("FilterToLegend",        "Flt->Lgnd",  "Create legend drafting from view filters"),
                     }
                 }
             };

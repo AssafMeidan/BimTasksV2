@@ -37,4 +37,12 @@ namespace BimTasksV2.Commands.Proxies
     [Transaction(TransactionMode.Manual)]
     public class ColorCodeByParameterCommand : Infrastructure.ProxyCommand
     { protected override string HandlerTypeName => "ColorCodeByParameterHandler"; }
+
+    [Transaction(TransactionMode.Manual)]
+    public class FilterToLegendCommand : Infrastructure.ProxyCommand
+    { protected override string HandlerTypeName => "FilterToLegendHandler"; }
+
+    [Transaction(TransactionMode.Manual)]
+    public class ColorSwatchCommand : Infrastructure.ProxyCommand
+    { protected override string HandlerTypeName => "ColorSwatchHandler"; }
 }

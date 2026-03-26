@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>7 — Cross-Cutting Issues | BimTasksV2 Guide</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<div class="container">
+
+<!-- ══════════════════════════════════════════════════════════
+     SECTION 7 — CROSS-CUTTING ISSUES
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-header">
+    <span class="section-num">7</span>
+    <div>
+      <div class="section-title">Cross-Cutting Issues</div>
+      <div class="section-desc">Architectural debt, systemic patterns, and improvement opportunities</div>
+    </div>
+  </div>
+
+  <p style="font-size:0.88rem; color:#374151; margin-bottom:1rem;">
+    This chapter collects issues that span multiple commands or affect the add-in's
+    architecture as a whole. Per-command issues are documented inline in their respective
+    chapters (2&ndash;6). These are the patterns that emerged across the full codebase review.
+  </p>
+</section>
+
+<!-- ── 7.1 ALC ISOLATION FRAGILITY ────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">ALC Isolation Fragility</span>
+    </div>
+    <span class="status status-needs-improvement">Architectural</span>
+  </div>
+  <div class="cmd-body">
+    <h4>The Problem</h4>
+    <p>
+      The entire add-in runs inside an <code>AssemblyLoadContext("BimTasksIsolated")</code>
+      to keep Prism 9, Unity, Vosk, and other dependencies away from Revit's default ALC.
+      The thin proxy layer in <code>BimTasksApp.cs</code> uses reflection to cross the boundary.
+    </p>
+    <p>This works, but creates several fragile seams:</p>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>Static fields are per-ALC.</strong> A static property set in the default ALC
+      (e.g., <code>BimTasksApp.DockablePaneId</code>) reads as <code>null</code> from the isolated ALC.
+      Every cross-ALC reference must go through reflection or shared interfaces.</li>
+      <li><strong>WPF bindings may not update source</strong> when the DataContext lives in the isolated ALC.
+      <code>HierarchicalDataTemplate</code> bindings are particularly affected &mdash; explicit code-behind
+      event handlers are needed as workarounds.</li>
+      <li><strong>Type identity breaks across ALCs.</strong> An <code>IExternalCommand</code> loaded in the
+      isolated ALC is not the same type as <code>IExternalCommand</code> in the default ALC.
+      This is why proxy commands exist at all.</li>
+      <li><strong>Debugging is harder.</strong> Stack traces show reflection invoke boundaries.
+      Breakpoints in isolated-ALC code require the debugger to attach to the correct context.</li>
+    </ul>
+
+    <h4>Affected Components</h4>
+    <div class="key-files">
+      <span class="key-file">BimTasksApp.cs (default ALC proxy)</span>
+      <span class="key-file">Infrastructure/BimTasksBootstrapper.cs (isolated ALC)</span>
+      <span class="key-file">Commands/Proxies/*.cs (all proxy commands)</span>
+    </div>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Recommendation</div>
+      <div class="improve-body">
+        <p>The ALC pattern is necessary but underdocumented. Consider adding a
+        <code>ARCHITECTURE.md</code> at the repo root explaining the ALC boundary,
+        what can/cannot cross it, and the proxy pattern rules. New commands will
+        inevitably hit these issues without guidance.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 7.2 HARDCODED DOMAIN ASSUMPTIONS ───────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Hardcoded Israeli Domain Assumptions</span>
+    </div>
+    <span class="status status-needs-improvement">Architectural</span>
+  </div>
+  <div class="cmd-body">
+    <h4>The Problem</h4>
+    <p>
+      Multiple commands embed Israeli construction conventions as hardcoded values
+      with no configuration mechanism:
+    </p>
+
+    <table class="data-table" style="margin:0.5rem 0 1rem 0;">
+      <thead>
+        <tr>
+          <th>Command</th>
+          <th>Hardcoded Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>BOQ Setup</td>
+          <td>Group name <code>"BIMIsrael_BOQ"</code></td>
+        </tr>
+        <tr>
+          <td>BOQ Schedules</td>
+          <td>Stage names: FOUNDATIONS, FRAME, BUILDING, FINISHES</td>
+        </tr>
+        <tr>
+          <td>BOQ AutoFill</td>
+          <td>Concrete detection via <code>"CONC"</code> substring</td>
+        </tr>
+        <tr>
+          <td>Contract Sections</td>
+          <td>4 Hebrew parameter names as Unicode escapes</td>
+        </tr>
+        <tr>
+          <td>Export JSON</td>
+          <td>24 category-to-schedule-name mappings</td>
+        </tr>
+        <tr>
+          <td>Piles From DWG</td>
+          <td>Family <code>"Auto"</code>, layer <code>"fnd"</code>, param <code>"Diameter"</code></td>
+        </tr>
+        <tr>
+          <td>Cladding commands</td>
+          <td>Hardcoded wall type names for inner/outer/insulation layers</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Recommendation</div>
+      <div class="improve-body">
+        <p>Extract domain-specific constants to a configuration file (JSON/XML alongside the DLL)
+        or a settings UI. This would make the add-in usable for non-Israeli projects without
+        code changes. Low priority for a personal tool, but high impact if ever shared.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 7.3 SILENT FAILURES ────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Silent Failure Patterns</span>
+    </div>
+    <span class="status status-needs-improvement">Systemic</span>
+  </div>
+  <div class="cmd-body">
+    <h4>The Problem</h4>
+    <p>
+      Several commands swallow exceptions or return default values without notifying
+      the user. The per-element try/catch pattern is good for resilience (one bad
+      element shouldn't abort the batch), but the reporting side often loses the detail:
+    </p>
+
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>BOQ Schedules:</strong> Empty try/catch in <code>FindField()</code>,
+      <code>AddSortGroup()</code>, <code>AddFilterHasValue()</code>. Schedules appear correct
+      but may have no sorting or filtering.</li>
+      <li><strong>BOQ AutoFill:</strong> COMP items silently skipped (no log, no explanation
+      in results). Geometry fallback returns 0 without warning.</li>
+      <li><strong>BOQ Calc Price:</strong> <code>EffUnitPrice = 0</code> marked as success when no
+      matching physical items found. User can't distinguish "genuinely zero" from "data missing."</li>
+      <li><strong>Contract Sections:</strong> Middle parameters may be unbound (only first/last checked).
+      Key row insertion may update wrong element.</li>
+      <li><strong>Export JSON:</strong> Category comparison silently skips if schedule name doesn't match mapping.</li>
+    </ul>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Recommendation</div>
+      <div class="improve-body">
+        <p>Add a "warnings" section to results dialogs. Currently most commands report
+        "X succeeded, Y failed" but no "Z completed with caveats." A three-tier result
+        (success / warning / error) would surface these silent issues without blocking the workflow.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 7.4 TRANSACTION PATTERNS ───────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Transaction Patterns &amp; Consistency</span>
+    </div>
+    <span class="status status-solid">Observation</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What's Good</h4>
+    <p>
+      Transaction discipline is consistent across the codebase:
+    </p>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li>All handlers use <code>[Transaction(TransactionMode.Manual)]</code>.</li>
+      <li>Complex workflows use <code>TransactionGroup</code> with <code>Assimilate()</code>
+      (Split Wall's 4-transaction pipeline, Filter to Legend's create + populate).</li>
+      <li>Batch operations commit if &ge;1 success, rollback if all fail.</li>
+      <li>Read-only commands (Filter Tree, Calc Area, Export JSON) correctly avoid transactions.</li>
+    </ul>
+
+    <h4>Areas of Concern</h4>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>TransactionGroup.Assimilate() invalidates Element refs</strong> &mdash; code must
+      re-fetch by <code>ElementId</code> after assimilation. Most code handles this, but it's
+      a recurring source of bugs when adding new features to multi-transaction commands.</li>
+      <li><strong>Copy From Link</strong> uses a different pattern (batch → chunked fallback) that
+      creates per-batch transactions in the fallback path. This means partial results are possible
+      (some chunks committed, some failed).</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ── 7.5 ERROR HANDLING CONSISTENCY ─────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Error Handling &amp; Reporting</span>
+    </div>
+    <span class="status status-solid">Observation</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What's Good</h4>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li>Per-element try/catch throughout &mdash; one bad element never aborts the batch.</li>
+      <li>Serilog logging at every major step (Information for flow, Warning for recoverable, Error for fatal).</li>
+      <li>TaskDialog for user-facing results with success/error counts.</li>
+      <li><code>OperationCanceledException</code> caught gracefully (user pressed Esc).</li>
+    </ul>
+
+    <h4>What's Inconsistent</h4>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>Some handlers use <code>TaskDialog.Show()</code> directly</strong>, others use
+      helper methods. No shared result dialog component.</li>
+      <li><strong>Error message detail varies wildly</strong> &mdash; Export JSON shows file paths
+      and validation breakdown; Piles From DWG shows just a count.</li>
+      <li><strong>Serilog log levels are inconsistent</strong> &mdash; some handlers log expected
+      conditions (e.g., "no elements selected") as Warning, others as Information.</li>
+    </ul>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Recommendation</div>
+      <div class="improve-body">
+        <p>Create a shared <code>CommandResult</code> class with success/warning/error counts
+        and a <code>ShowResultDialog()</code> method. This would standardize reporting
+        across all handlers and make the three-tier result pattern easy to adopt.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 7.6 ELEMENT INVALIDATION ───────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Element Reference Invalidation</span>
+    </div>
+    <span class="status status-needs-improvement">Systemic</span>
+  </div>
+  <div class="cmd-body">
+    <h4>The Problem</h4>
+    <p>
+      Revit <code>Element</code> objects become invalid after transactions that modify or delete them.
+      <code>TransactionGroup.Assimilate()</code> also invalidates in-memory references.
+      Accessing properties on an invalid element throws <code>InvalidOperationException</code>.
+    </p>
+
+    <h4>Current Mitigations</h4>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><code>Element.IsValidObject</code> checks before property access (used in Wall Splitter, Detect Overlaps).</li>
+      <li>Store <code>ElementId</code> instead of <code>Element</code> and re-fetch after transactions (used in Filter Tree).</li>
+      <li>Re-collecting elements after <code>Assimilate()</code> (used in Split Wall pipeline).</li>
+    </ul>
+
+    <h4>Where It's Not Handled</h4>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>Detect Overlapping Walls:</strong> stores wall list (not IDs) &mdash; safe only because
+      all operations are within a single transaction, but if the transaction model changes, walls could go stale.</li>
+      <li><strong>Contract Sections:</strong> key element references retrieved after row insertion
+      may be invalid if Revit's internal schedule restructuring runs between operations.</li>
+    </ul>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Recommendation</div>
+      <div class="improve-body">
+        <p>Adopt a consistent "store ElementId, re-fetch on use" pattern across all handlers.
+        The current mixed approach (some store Elements, some store IDs) is a maintenance risk.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── 7.7 SERVICE RESOLUTION TIMING ──────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Service Resolution Timing</span>
+    </div>
+    <span class="status status-needs-improvement">Architectural</span>
+  </div>
+  <div class="cmd-body">
+    <h4>The Problem</h4>
+    <p>
+      Services are registered in <code>BimTasksBootstrapper.OnFirstIdle()</code> (phase 3 of startup).
+      ViewModels that resolve services in their constructors will fail if constructed before
+      <code>OnFirstIdle()</code> fires. The dockable panel ViewModel was explicitly designed to
+      avoid this, but new ViewModels could easily fall into the trap.
+    </p>
+
+    <h4>Current Mitigation</h4>
+    <p style="font-size:0.88rem; color:#374151;">
+      <code>BimTasksDockablePanelViewModel</code> uses lazy resolution &mdash; services are resolved
+      on first use, not in the constructor. This works but is not enforced by the framework.
+    </p>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Recommendation</div>
+      <div class="improve-body">
+        <p>Document the "no constructor resolution" rule prominently. Consider a base ViewModel
+        class that provides lazy service accessors, making the pattern easy to follow for new code.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 7.8 FLOATING TOOLBAR ───────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Floating Toolbar &mdash; Known Broken</span>
+    </div>
+    <span class="status status-broken">Broken</span>
+  </div>
+  <div class="cmd-body">
+    <h4>The Problem</h4>
+    <p>
+      The floating toolbar is the only fully broken feature in the add-in. It has not been
+      debugged yet. Likely causes:
+    </p>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>Window lifecycle:</strong> Singleton pattern (cancel close &rarr; hide) may conflict
+      with WPF's window state in the isolated ALC.</li>
+      <li><strong>Event subscription timing:</strong> <code>ToggleFloatingToolbarEvent</code> may fire
+      before the subscriber is wired up.</li>
+      <li><strong>ALC boundary:</strong> WPF modeless windows in isolated ALCs have known issues
+      with owner assignment and dispatcher affinity.</li>
+      <li><strong>Command dispatch:</strong> Toolbar buttons need to invoke commands through
+      <code>ICommandDispatcherService</code>, which requires Revit API thread access.
+      If the dispatch path is broken, buttons appear but do nothing.</li>
+    </ul>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Debugging Plan</div>
+      <div class="improve-body">
+        <p>
+          1. Verify <code>ToggleFloatingToolbarEvent</code> reaches the subscriber (add Serilog trace).<br/>
+          2. Check if the window is created and shown (may be off-screen or behind Revit).<br/>
+          3. Test button click &rarr; <code>ICommandDispatcherService.Enqueue()</code> path.<br/>
+          4. If window shows but buttons fail, the ALC command dispatch path is broken.<br/>
+          5. If window doesn't show, check WPF owner/dispatcher affinity in isolated ALC.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 7.9 OVERALL STATUS ─────────────────────────────────── -->
+<section class="section" style="margin-top:2rem;">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Overall Add-In Status</div>
+    </div>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Status</th>
+        <th>Count</th>
+        <th>Commands</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="status status-solid">Solid</span></td>
+        <td>24</td>
+        <td>Sync Phases, Copy Linked, Wall Height, Split Wall, Trim Corners, Detect Overlaps,
+        Window Families, Join Walls &amp; Floors, Split Floor, Join Beams to Walls,
+        Export Schedule, Edit In Excel, BOQ Setup, BOQ Schedules, BOQ Calc Price,
+        Filter Tree, Calc Area, Uniformat, Copy From Link, Dockable Panel,
+        Export JSON, Voice, Floor DWG Pick, Floors DWG All, Create Similar</td>
+      </tr>
+      <tr>
+        <td><span class="status status-sketchy">Sketchy</span></td>
+        <td>7</td>
+        <td>Wall To Floors, Cladding (x3), Beams To Ground, Import Key Schedules,
+        BOQ AutoFill, Contract Sections, Piles From DWG</td>
+      </tr>
+      <tr>
+        <td><span class="status status-needs-improvement">Needs Improvement</span></td>
+        <td>1</td>
+        <td>Filter to Legend (untested scale fix)</td>
+      </tr>
+      <tr>
+        <td><span class="status status-broken">Broken</span></td>
+        <td>1</td>
+        <td>Floating Toolbar</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:1.5rem;">
+    <div style="font-weight:700; font-size:0.9rem; color:#1e3a5f; margin-bottom:0.75rem;">Summary</div>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>31+ commands implemented across 5 ribbon panels.</strong> The add-in is functionally
+      comprehensive for its target domain (Israeli BIM construction projects).</li>
+      <li><strong>73% of commands are solid</strong> &mdash; well-implemented with proper error handling,
+      transactions, and user feedback.</li>
+      <li><strong>Only 1 command is fully broken</strong> (Floating Toolbar) and 1 needs testing
+      (Filter to Legend). The rest work in production.</li>
+      <li><strong>The main architectural risks</strong> are ALC isolation fragility, hardcoded domain
+      assumptions, and silent failure patterns. None are blocking &mdash; they're maintenance
+      and extensibility concerns.</li>
+      <li><strong>The strongest areas</strong> are the schedule export pipeline (27-style professional formatting),
+      the wall splitter (4-transaction pipeline with compound layer analysis), and the DWG floor
+      import tools (multi-stage geometry extraction with robust error handling).</li>
+    </ul>
+  </div>
+</section>
+
+</div><!-- /container -->
+</body>
+</html>

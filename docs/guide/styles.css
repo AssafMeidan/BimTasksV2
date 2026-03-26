@@ -1,0 +1,423 @@
+/* ══════════════════════════════════════════════════════════
+   BimTasksV2 — User Guide Stylesheet
+   Based on BIM Israel DB Architecture Guide visual pattern
+   ══════════════════════════════════════════════════════════ */
+
+/* ── Reset & Base ──────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; }
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: #f8fafc;
+  color: #1f2937;
+  line-height: 1.6;
+}
+
+/* ── Layout ────────────────────────────────────────────── */
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 2rem 4rem;
+}
+
+/* ── Print Button ──────────────────────────────────────── */
+.no-print {
+  position: fixed;
+  top: 1.25rem;
+  right: 1.25rem;
+  z-index: 9999;
+  background: #1e3a5f;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.55rem 1.2rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  transition: background 0.15s;
+}
+.no-print:hover { background: #1e40af; }
+
+/* ── Cover ─────────────────────────────────────────────── */
+.cover {
+  text-align: center;
+  padding: 6rem 2rem 5rem;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-top: 5px solid #1e3a5f;
+  color: #1f2937;
+  border-radius: 12px;
+  margin-bottom: 2.5rem;
+}
+.cover h1 { font-size: 2.2rem; font-weight: 700; margin-bottom: 1rem; color: #1e3a5f; }
+.cover .subtitle { font-size: 1.1rem; color: #4b5563; margin-bottom: 0.4rem; }
+.cover .date { font-size: 0.95rem; color: #6b7280; margin-top: 1.5rem; }
+.cover .meta { font-size: 0.85rem; color: #9ca3af; margin-top: 0.3rem; }
+
+/* ── TOC ───────────────────────────────────────────────── */
+.toc {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 2rem;
+  margin-bottom: 2.5rem;
+}
+.toc h2 {
+  margin: 0 0 1.5rem 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #1e3a5f;
+  border-bottom: 2px solid #1e3a5f;
+  padding-bottom: 0.5rem;
+}
+.toc-item {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr auto;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+.toc-item:last-child { border-bottom: none; }
+.toc-num {
+  font-weight: 700;
+  color: #1e3a5f;
+  font-size: 1rem;
+}
+.toc-title { font-weight: 600; font-size: 0.95rem; }
+.toc-detail { font-size: 0.78rem; color: #6b7280; text-align: right; }
+
+/* ── Section Wrapper ───────────────────────────────────── */
+.section {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 2rem;
+  margin-bottom: 2.5rem;
+}
+
+/* ── Architecture Section (highlighted) ────────────────── */
+.arch-section {
+  background: #f0f7ff;
+  color: #1e293b;
+  border: 1px solid #bfdbfe;
+  border-top: 5px solid #1e3a5f;
+  border-radius: 10px;
+  padding: 2.5rem;
+  margin-bottom: 2.5rem;
+}
+
+/* ── Section Header ────────────────────────────────────── */
+.section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e5e7eb;
+}
+.arch-section .section-header { border-bottom-color: #bfdbfe; }
+
+.section-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  background: #1e3a5f;
+  color: #fff;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.section-title { font-size: 1.4rem; font-weight: 700; color: #1e3a5f; }
+.section-desc { font-size: 0.88rem; color: #6b7280; margin-top: 0.2rem; }
+.arch-section .section-desc { color: #4b5563; }
+
+/* ── Diagram ───────────────────────────────────────────── */
+.diagram-wrap {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin: 1.5rem 0;
+}
+.arch-section .diagram-wrap {
+  background: #ffffff;
+  border-color: #bfdbfe;
+}
+.diagram-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+  margin-bottom: 0.75rem;
+}
+.arch-section .diagram-title { color: #4b5563; }
+.mermaid { overflow-x: auto; }
+
+/* ── Callout ───────────────────────────────────────────── */
+.callout {
+  border-left: 4px solid #1e40af;
+  background: #eff6ff;
+  border-radius: 0 8px 8px 0;
+  padding: 1rem 1.25rem;
+  margin: 1rem 0;
+}
+.arch-section .callout {
+  background: #dbeafe;
+  border-left-color: #2563eb;
+}
+.callout-title {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: #1e40af;
+  margin-bottom: 0.4rem;
+}
+.arch-section .callout-title { color: #1e3a5f; }
+.callout-body { font-size: 0.88rem; }
+.arch-section .callout-body { color: #1e3a5f; }
+
+/* ── Command Card ──────────────────────────────────────── */
+.cmd-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+.cmd-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f1f5f9;
+  padding: 0.8rem 1.2rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+.cmd-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 1rem;
+  color: #1e3a5f;
+}
+.cmd-ribbon {
+  font-size: 0.78rem;
+  color: #6b7280;
+  font-style: italic;
+  margin-left: 0.75rem;
+}
+.cmd-body { padding: 1.2rem; }
+.cmd-body h4 {
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+  margin: 1.2rem 0 0.5rem 0;
+}
+.cmd-body h4:first-child { margin-top: 0; }
+.cmd-body p {
+  font-size: 0.88rem;
+  color: #374151;
+  margin-bottom: 0.5rem;
+  line-height: 1.65;
+}
+.cmd-body ol, .cmd-body ul {
+  font-size: 0.88rem;
+  color: #374151;
+  margin: 0.3rem 0 0.5rem 1.4rem;
+  line-height: 1.65;
+}
+.cmd-body li { margin-bottom: 0.3rem; }
+
+/* ── Command Card Grid (2-col for small commands) ──────── */
+.cmd-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+/* ── Key Files List ────────────────────────────────────── */
+.key-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+}
+.key-file {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  background: #f1f5f9;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  color: #1e40af;
+}
+
+/* ── Status Badges ─────────────────────────────────────── */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.status-solid   { background: #dcfce7; color: #166534; }
+.status-sketchy { background: #fef9c3; color: #854d0e; }
+.status-broken  { background: #fee2e2; color: #991b1b; }
+.status-improve { background: #e0e7ff; color: #3730a3; }
+
+/* ── Issue Card ────────────────────────────────────────── */
+.issue-card {
+  border: 1px solid #fca5a5;
+  background: #fff5f5;
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.issue-title {
+  font-weight: 700;
+  color: #b91c1c;
+  font-size: 0.95rem;
+  margin-bottom: 0.75rem;
+}
+.issue-body p {
+  font-size: 0.87rem;
+  color: #374151;
+  margin-bottom: 0.6rem;
+  line-height: 1.65;
+}
+.issue-body p:last-child { margin-bottom: 0; }
+
+/* ── Improvement Card (softer than issue) ──────────────── */
+.improve-card {
+  border: 1px solid #a5b4fc;
+  background: #eef2ff;
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.improve-title {
+  font-weight: 700;
+  color: #3730a3;
+  font-size: 0.95rem;
+  margin-bottom: 0.75rem;
+}
+.improve-body p {
+  font-size: 0.87rem;
+  color: #374151;
+  margin-bottom: 0.6rem;
+  line-height: 1.65;
+}
+.improve-body p:last-child { margin-bottom: 0; }
+
+/* ── Info Boxes ────────────────────────────────────────── */
+.info-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.info-box {
+  border-radius: 6px;
+  padding: 0.75rem;
+  font-size: 0.82rem;
+}
+.info-box.tip      { background: #f0fdf4; border: 1px solid #bbf7d0; }
+.info-box.warning  { background: #fff7ed; border: 1px solid #fed7aa; }
+.info-box.note     { background: #eff6ff; border: 1px solid #bfdbfe; }
+.info-box.gotcha   { background: #fdf4ff; border: 1px solid #e9d5ff; }
+.info-label {
+  font-weight: 700;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+  margin-bottom: 0.35rem;
+  display: block;
+}
+.info-text { color: #374151; line-height: 1.55; }
+
+/* ── Tables (generic) ──────────────────────────────────── */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin: 1rem 0;
+}
+.data-table th {
+  background: #1e3a5f;
+  color: #fff;
+  font-weight: 600;
+  padding: 0.55rem 0.8rem;
+  text-align: left;
+}
+.data-table td {
+  padding: 0.5rem 0.8rem;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: top;
+}
+.data-table tr:nth-child(even) td { background: #f8fafc; }
+.data-table code {
+  font-size: 0.8rem;
+}
+
+/* ── Page Break (print) ───────────────────────────────── */
+.page-break { page-break-before: always; }
+
+/* ── Code inline ──────────────────────────────────────── */
+code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82em;
+  background: #f1f5f9;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  color: #1e40af;
+}
+
+/* ── Service Card (for architecture) ──────────────────── */
+.service-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+.service-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+}
+.arch-section .service-card {
+  border-color: #bfdbfe;
+}
+.service-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #1e3a5f;
+  margin-bottom: 0.4rem;
+}
+.service-desc {
+  font-size: 0.85rem;
+  color: #374151;
+  line-height: 1.55;
+}
+
+/* ── Print styles ─────────────────────────────────────── */
+@media print {
+  body { background: #fff; font-size: 11pt; }
+  .container { max-width: 100%; padding: 0; }
+  .no-print { display: none !important; }
+  .cover, .arch-section { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .section, .arch-section, .cmd-card { break-inside: avoid; }
+  .page-break { page-break-before: always; }
+  .cmd-grid { grid-template-columns: 1fr; }
+}

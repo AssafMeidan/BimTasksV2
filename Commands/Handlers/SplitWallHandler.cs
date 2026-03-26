@@ -1,25 +1,35 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using BimTasksV2.Commands.Infrastructure;
-using BimTasksV2.Events;
 using BimTasksV2.Helpers;
 using BimTasksV2.Helpers.WallSplitter;
 using BimTasksV2.Views;
-using Prism.Events;
-using Prism.Ioc;
 using Serilog;
 
 namespace BimTasksV2.Commands.Handlers
 {
     /// <summary>
     /// Splits compound walls into individual single-layer walls.
-    /// Shows a dialog for layer type assignment, hosted element handling, and scope selection.
+    /// Saves split results to a JSON file and shows the dockable panel
+    /// with a Trim Corners view. The user OKs Revit warnings, then clicks
+    /// Trim Corners as a separate command.
     /// </summary>
     public class SplitWallHandler : ICommandHandler
     {
+        /// <summary>
+        /// Path to the JSON file storing split results for the Trim Corners command.
+        /// Stored next to the plugin DLL so both commands can find it.
+        /// </summary>
+        public static string SplitResultsPath =>
+            Path.Combine(
+                Path.GetDirectoryName(typeof(SplitWallHandler).Assembly.Location)!,
+                "split_results.json");
+
         public void Execute(UIApplication uiApp)
         {
             var uidoc = uiApp.ActiveUIDocument;
@@ -117,14 +127,12 @@ namespace BimTasksV2.Commands.Handlers
                     {
                         layer.ResolvedType = row.SelectedType.WallType;
                     }
-                    // If auto-create or no selection, leave ResolvedType null — engine will auto-create
                 }
 
                 // Determine scope
                 List<Wall> wallsToSplit;
                 if (dialog.SplitAllOfType)
                 {
-                    // Collect all walls of the same WallType in the project
                     var wallTypeId = firstWall.WallType.Id;
                     wallsToSplit = new FilteredElementCollector(doc)
                         .OfClass(typeof(Wall))
@@ -144,10 +152,18 @@ namespace BimTasksV2.Commands.Handlers
                 int failed = 0;
                 var messages = new List<string>();
                 var allResults = new List<SplitResult>();
+                var wallIds = wallsToSplit.Select(w => w.Id).ToList();
 
-                foreach (var wall in wallsToSplit)
+                foreach (var wallId in wallIds)
                 {
-                    // Re-analyze layers per wall (offsets are per-instance)
+                    var wall = doc.GetElement(wallId) as Wall;
+                    if (wall == null || !wall.IsValidObject)
+                    {
+                        failed++;
+                        messages.Add($"Wall {wallId}: Element no longer valid.");
+                        continue;
+                    }
+
                     var wallLayers = CompoundLayerAnalyzer.AnalyzeLayers(wall);
                     if (wallLayers.Count == 0)
                     {
@@ -156,14 +172,11 @@ namespace BimTasksV2.Commands.Handlers
                         continue;
                     }
 
-                    // Apply type selections from dialog to re-analyzed layers
                     foreach (var wl in wallLayers)
                     {
                         var row = layerRows.FirstOrDefault(r => r.Index == wl.Index);
                         if (row?.SelectedType != null && !row.SelectedType.IsAutoCreate)
-                        {
                             wl.ResolvedType = row.SelectedType.WallType;
-                        }
                     }
 
                     var result = WallSplitterEngine.SplitWall(
@@ -172,9 +185,7 @@ namespace BimTasksV2.Commands.Handlers
                     allResults.Add(result);
 
                     if (result.Success)
-                    {
                         succeeded++;
-                    }
                     else
                     {
                         failed++;
@@ -182,76 +193,85 @@ namespace BimTasksV2.Commands.Handlers
                     }
                 }
 
-                // Save corner fix data and show Fix Corners panel
+                // Save split results to JSON for the Trim Corners command
                 var successfulResults = allResults.Where(r => r.Success).ToList();
-                if (successfulResults.Count > 0)
-                {
-                    try
-                    {
-                        string filePath = WallSplitterEngine.GetCornerFixDataPath();
-                        WallSplitterEngine.SaveCornerFixData(filePath, successfulResults);
-                        Log.Information("[SplitWallHandler] Saved corner fix data to {FilePath}", filePath);
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Warning(ex, "[SplitWallHandler] Failed to save corner fix data");
-                    }
-
-                    // Switch dockable panel to FixSplitCornersView
-                    try
-                    {
-                        var container = BimTasksV2.Infrastructure.ContainerLocator.Container;
-                        var contextService = container.Resolve<Services.IRevitContextService>();
-                        contextService.UIApplication = uiApp;
-                        contextService.UIDocument = uidoc;
-
-                        var eventAggregator = BimTasksV2.Infrastructure.ContainerLocator.EventAggregator;
-
-                        eventAggregator.GetEvent<BimTasksEvents.SwitchDockablePanelEvent>()
-                            .Publish("FixSplitCorners");
-
-                        int totalReplacements = successfulResults.Sum(r => r.ReplacementWalls.Count);
-                        eventAggregator.GetEvent<BimTasksEvents.FixSplitCornersReadyEvent>()
-                            .Publish(new FixSplitCornersPayload
-                            {
-                                WallsSplit = succeeded,
-                                TotalReplacements = totalReplacements
-                            });
-
-                        var pane = uiApp.GetDockablePane(
-                            BimTasksV2.Infrastructure.BimTasksBootstrapper.DockablePaneId);
-                        if (pane != null && !pane.IsShown())
-                            pane.Show();
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Warning(ex, "[SplitWallHandler] Failed to show Fix Corners panel");
-                    }
-                }
+                SaveSplitResults(successfulResults);
 
                 // Show summary
                 string summary = $"Split complete: {succeeded} succeeded, {failed} failed out of {wallsToSplit.Count} wall(s).";
-                if (successfulResults.Count > 0)
-                {
-                    summary += "\n\nDismiss any join errors, then click 'Fix Corners' in the BimTasks panel.";
-                }
                 if (messages.Count > 0)
-                {
                     summary += "\n\nDetails:\n" + string.Join("\n", messages);
-                }
-                TaskDialog.Show("BimTasksV2 - Wall Splitter", summary);
 
+                summary += "\n\nOK any Revit warnings, then click 'Trim Corners' in the panel.";
+                TaskDialog.Show("BimTasksV2 - Wall Splitter", summary);
                 Log.Information("[SplitWallHandler] {Summary}", summary.Replace("\n", " "));
+
+                // Show the dockable panel with TrimCorners view
+                try
+                {
+                    var pane = uiApp.GetDockablePane(
+                        BimTasksV2.Infrastructure.BimTasksBootstrapper.DockablePaneId);
+                    if (pane != null && !pane.IsShown())
+                        pane.Show();
+
+                    var eventAgg = BimTasksV2.Infrastructure.ContainerLocator.EventAggregator;
+                    eventAgg.GetEvent<Events.BimTasksEvents.SwitchDockablePanelEvent>()
+                        .Publish("TrimCorners");
+                }
+                catch (Exception paneEx)
+                {
+                    Log.Warning(paneEx, "[SplitWallHandler] Could not show dockable panel");
+                }
             }
             catch (Autodesk.Revit.Exceptions.OperationCanceledException)
             {
-                // User cancelled — silently return
+                // User cancelled
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "SplitWall failed");
-                TaskDialog.Show("BimTasksV2", $"Error: {ex.Message}");
+                Log.Error(ex, "[SplitWallHandler] Failed. StackTrace: {Stack}", ex.StackTrace);
+                TaskDialog.Show("BimTasksV2", $"Error: {ex.Message}\n\nSource: {ex.TargetSite?.DeclaringType?.Name}.{ex.TargetSite?.Name}");
             }
         }
+
+        /// <summary>
+        /// Serializes split result IDs and layer info to a JSON file
+        /// so the Trim Corners command can read them as a separate invocation.
+        /// </summary>
+        private static void SaveSplitResults(List<SplitResult> results)
+        {
+            try
+            {
+                var data = results.Select(r => new SplitResultData
+                {
+                    Replacements = r.ReplacementIds.Select(rid => new ReplacementData
+                    {
+                        WallId = rid.WallId.Value,
+                        LayerIndex = rid.Layer.Index
+                    }).ToList()
+                }).ToList();
+
+                var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(SplitResultsPath, json);
+                Log.Information("[SplitWallHandler] Saved {Count} split results to {Path}", results.Count, SplitResultsPath);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[SplitWallHandler] Failed to save split results");
+            }
+        }
+    }
+
+    /// <summary>JSON-serializable split result data.</summary>
+    public class SplitResultData
+    {
+        public List<ReplacementData> Replacements { get; set; } = new();
+    }
+
+    /// <summary>JSON-serializable replacement wall reference.</summary>
+    public class ReplacementData
+    {
+        public long WallId { get; set; }
+        public int LayerIndex { get; set; }
     }
 }

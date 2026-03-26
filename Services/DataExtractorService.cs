@@ -221,6 +221,7 @@ namespace BimTasksV2.Services
                     AssemblyDescription = GetAssemblyDescription(doc, e, elementType),
                     TypeComments = GetTypeParameter(typeParamCache, elementType, "Type Comments", BuiltInParameter.ALL_MODEL_TYPE_COMMENTS),
                     TypeDescription = GetTypeParameter(typeParamCache, elementType, "Description", BuiltInParameter.ALL_MODEL_DESCRIPTION),
+                    Description = GetTypeParameter(typeParamCache, elementType, "Description", BuiltInParameter.ALL_MODEL_DESCRIPTION),
                     Keynote = GetTypeParameter(typeParamCache, elementType, "Keynote", BuiltInParameter.KEYNOTE_PARAM),
                     TypeModel = GetTypeModelParameter(elementType),
 
@@ -241,7 +242,7 @@ namespace BimTasksV2.Services
 
                     // Legacy Fields
                     SeifChoze = GetBOQParameter(paramCache, typeParamCache, "SeifChoze", "Seif Choze"),
-                    SeifChozeDescription = GetBOQParameter(paramCache, typeParamCache, "SeifChozeDescription", "Seif Choze Description"),
+                    SeifChozeDescription = GetBOQParameter(paramCache, typeParamCache, "SeifChozeDescription", "Seif Choze Description", "תאור סעיף"),
                     IsMedida = GetIsMedida(paramCache, typeParamCache),
                     SubcontractorName = GetBOQParameter(paramCache, typeParamCache, "SubcontractorName", "Subcontractor", "Name1"),
                     TotalContractPrice = GetTotalContractPrice(paramCache, typeParamCache)

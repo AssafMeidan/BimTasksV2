@@ -97,9 +97,13 @@ namespace BimTasksV2.Models
         [JsonPropertyName("TypeComments")]
         public string TypeComments { get; set; }
 
-        /// <summary>Type description parameter</summary>
+        /// <summary>Type description parameter (also exported as Description)</summary>
         [JsonPropertyName("TypeDescription")]
         public string TypeDescription { get; set; }
+
+        /// <summary>Type description exported as "Description"</summary>
+        [JsonPropertyName("Description")]
+        public string Description { get; set; }
 
         /// <summary>Keynote value</summary>
         [JsonPropertyName("Keynote")]

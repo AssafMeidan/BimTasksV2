@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3 — Structure | BimTasksV2 Guide</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<div class="container">
+
+<!-- ══════════════════════════════════════════════════════════
+     SECTION 3 — STRUCTURE
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-header">
+    <span class="section-num">3</span>
+    <div>
+      <div class="section-title">Structure</div>
+      <div class="section-desc">4 commands &mdash; beams, geometry joins, floor splitting</div>
+    </div>
+  </div>
+
+  <p style="font-size:0.88rem; color:#374151; margin-bottom:1rem;">
+    The Structure panel handles structural element manipulation: relocating beams,
+    joining geometry between walls and floors/beams, and splitting compound floors.
+    The two "Join" commands share a near-identical pattern (intersection filter &rarr;
+    pairwise join with retry) and are the most robust handlers in the panel.
+  </p>
+</section>
+
+<!-- ── 3.1 BEAMS TO GROUND ────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Beams To Ground</span>
+      <span class="cmd-ribbon">Ribbon: Structure &rarr; Beams To Ground</span>
+    </div>
+    <span class="status status-sketchy">Sketchy</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Recreates selected beams at Level 0 while preserving their top elevation.
+      Useful when beams are modeled at arbitrary levels but need to reference Level 0
+      with a Z-offset for structural analysis.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Select one or more structural framing elements (beams).</li>
+      <li>Click <strong>Beams To Ground</strong>.</li>
+      <li>Handler finds Level 0 (elevation == 0) in the document.</li>
+      <li>For each beam:
+        <ul>
+          <li>Reads the beam's top elevation (<code>STRUCTURAL_ELEVATION_AT_TOP</code>).</li>
+          <li>Creates a <strong>new</strong> beam at Level 0 with the same curve and family type.</li>
+          <li>Sets Z-justification to Top, reference level to Level 0.</li>
+          <li>Sets Z-offset to the original top elevation (preserves visual position).</li>
+        </ul>
+      </li>
+      <li>Deletes all original beams in batch.</li>
+      <li>Shows count summary.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/SetBeamsToGroundZeroHandler.cs</span>
+    </div>
+
+    <div class="issue-card" style="margin-top:1rem;">
+      <div class="issue-title">Originals Deleted Before Verifying Replacements</div>
+      <div class="issue-body">
+        <p>The handler deletes original beams after creating replacements, but does not verify
+        that each new beam was actually created successfully. If <code>doc.Create.NewFamilyInstance()</code>
+        returns <code>null</code> (rare but possible), the original beam is deleted with no replacement.
+        Should track which originals have confirmed replacements before batch-deleting.</p>
+      </div>
+    </div>
+    <div class="improve-card">
+      <div class="improve-title">No Try-Catch in Main Loop</div>
+      <div class="improve-body">
+        <p>Relies on null checks but has no exception handling around individual beam processing.
+        One malformed beam geometry could abort the entire operation mid-way, leaving some beams
+        duplicated and others not yet processed.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 3.2 JOIN WALLS & FLOORS ────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Join Walls &amp; Floors</span>
+      <span class="cmd-ribbon">Ribbon: Structure &rarr; Join Walls &amp; Floors</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Joins geometry between all concrete walls and the selected floors, roofs, ceilings,
+      or structural foundations. Uses <code>ElementIntersectsElementFilter</code> to find
+      spatially overlapping walls, then joins each pair. Handles join-order sensitivity
+      by retrying in reverse order on failure.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Select one or more floors, roofs, ceilings, or foundations.</li>
+      <li>Click <strong>Join Walls &amp; Floors</strong>.</li>
+      <li>For each selected host element:
+        <ul>
+          <li>Finds all walls that intersect it geometrically.</li>
+          <li>Skips: already-joined pairs, thin walls (&lt;30mm), curtain walls, stacked walls.</li>
+          <li>Attempts <code>JoinGeometry(host, wall)</code>.</li>
+          <li>If <code>ArgumentException</code>, retries with switched order: <code>JoinGeometry(wall, host)</code>.</li>
+        </ul>
+      </li>
+      <li>Shows detailed results: walls joined (normal vs. switched), skipped, already joined, failed (with IDs).</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/JoinAllConcreteWallsAndFloorsGeometryHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box tip">
+        <span class="info-label">Design Strength</span>
+        <div class="info-text">
+          Excellent per-element error handling. Every operation is wrapped in try-catch.
+          Failures are logged and reported but never stop the overall process. The
+          switched-order retry handles Revit's unpredictable join-order sensitivity.
+        </div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">Warning Suppression</span>
+        <div class="info-text">
+          Uses <code>SuppressWarningsPreprocessor</code> to silently handle Revit's
+          geometry join warnings that would otherwise halt the transaction.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 3.3 SPLIT FLOOR ────────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Split Floor</span>
+      <span class="cmd-ribbon">Ribbon: Structure &rarr; Split Floor</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Splits compound (multi-layer) floors into individual single-layer floors &mdash;
+      the floor equivalent of Split Wall. Each layer becomes a separate floor at its
+      correct vertical offset. Preserves slope arrows, shape editing (vertex modifications),
+      and openings from the original floor.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Select one or more compound floors.</li>
+      <li>Click <strong>Split Floor</strong>.</li>
+      <li>Dialog shows layer breakdown with type-assignment combo per layer (auto-create or existing type).</li>
+      <li>Choose scope: selected floors only, or all floors of the same type.</li>
+      <li>Click Split &mdash; engine runs a 4-transaction pipeline per floor.</li>
+    </ol>
+
+    <div class="diagram-wrap">
+      <div class="diagram-title">Split Floor &mdash; 4-Transaction Pipeline (per floor)</div>
+      <div class="mermaid">
+graph LR
+  R["Record slope,\nopenings, shape\nediting"] --> A["Tx 1:\nCreate replacement\nfloors + apply slope\n+ shape editing"]
+  A --> B["Tx 2:\nRecreate openings\non each layer"]
+  B --> C["Tx 3:\nDelete original\ncompound floor"]
+  C --> D["Tx 4:\nJoin adjacent\nreplacement layers"]
+
+  style R fill:#f1f5f9,stroke:#94a3b8
+  style A fill:#1e3a5f,color:#fff
+  style B fill:#7c3aed,color:#fff
+  style C fill:#b91c1c,color:#fff
+  style D fill:#166534,color:#fff
+      </div>
+    </div>
+
+    <h4>Preserved Properties</h4>
+    <table class="data-table" style="margin:0.5rem 0 1rem 0;">
+      <thead>
+        <tr>
+          <th>Property</th>
+          <th>How It's Preserved</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Boundary curves</td>
+          <td>Extracted from sketch profile; fallback to top-face geometry edges</td>
+        </tr>
+        <tr>
+          <td>Slope arrow + angle</td>
+          <td>Recorded before split, reapplied to each replacement floor</td>
+        </tr>
+        <tr>
+          <td>Shape editing (vertices)</td>
+          <td>Vertex offsets recorded, matched to new floors by XY proximity (3mm tolerance)</td>
+        </tr>
+        <tr>
+          <td>Openings</td>
+          <td>Boundaries recorded pre-split, recreated on each layer with Z-flattening for sloped floors</td>
+        </tr>
+        <tr>
+          <td>Height offset</td>
+          <td>Original offset + layer's TopOffset applied to each replacement</td>
+        </tr>
+        <tr>
+          <td>Parameters</td>
+          <td>Comments, mark, structural flag copied to each replacement</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/SplitFloorHandler.cs</span>
+      <span class="key-file">Helpers/FloorSplitter/FloorSplitterEngine.cs</span>
+      <span class="key-file">Helpers/FloorSplitter/FloorLayerAnalyzer.cs</span>
+      <span class="key-file">Views/FloorSplitterDialog.xaml</span>
+    </div>
+
+    <div class="callout" style="margin-top:1rem;">
+      <div class="callout-title">Opening Recreation &mdash; Z-Flattening</div>
+      <div class="callout-body">
+        <p>Sloped floors have opening curves at varying Z elevations. The engine flattens all
+        opening curves to a consistent Z before recreation. Without this, openings on sloped
+        floors would be created at the wrong elevation or fail entirely. Handles Line and Arc
+        curves explicitly; other curve types pass through as-is.</p>
+      </div>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box warning">
+        <span class="info-label">Edge Case</span>
+        <div class="info-text">
+          Shape editing vertex matching uses XY proximity (3mm). Floors with very close
+          vertices or irregular subdivision could mismatch. In practice, this tolerance
+          works for standard construction geometry.
+        </div>
+      </div>
+      <div class="info-box gotcha">
+        <span class="info-label">Boundary Fallback</span>
+        <div class="info-text">
+          If sketch profile extraction fails, the engine falls back to extracting edges from the
+          topmost horizontal <code>PlanarFace</code> in the floor's geometry. Less precise but
+          ensures the split doesn't abort entirely.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── 3.4 JOIN BEAMS TO WALLS ────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Join Beams to Walls</span>
+      <span class="cmd-ribbon">Utility (no ribbon button)</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Joins geometry between selected structural elements (beams, columns, foundations) and
+      all intersecting walls. Same join-retry pattern as Join Walls &amp; Floors, but operates
+      on structural framing instead of floors/roofs.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Select beams, columns, or structural foundations.</li>
+      <li>Invoke the command (available as utility, not on the main ribbon).</li>
+      <li>For each structural element:
+        <ul>
+          <li>Finds intersecting walls via <code>ElementIntersectsElementFilter</code>.</li>
+          <li>Skips already-joined, thin, curtain, and stacked walls.</li>
+          <li>Joins with retry on <code>ArgumentException</code> (switched order).</li>
+        </ul>
+      </li>
+      <li>Results dialog shows per-category breakdown (beams/columns/foundations processed, walls joined, failures).</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/JoinSelectedBeamsToBlockWallsHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Shared Pattern</span>
+        <div class="info-text">
+          Nearly identical to Join Walls &amp; Floors. Both use the same intersection filter,
+          wall filtering (width/curtain/stacked), join-retry logic, and results reporting.
+          Could be refactored into a shared base class, but both work correctly as-is.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     CHAPTER SUMMARY
+     ══════════════════════════════════════════════════════════ -->
+<section class="section" style="margin-top:2rem;">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Structure &mdash; Summary</div>
+    </div>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Command</th>
+        <th>Input</th>
+        <th>UI</th>
+        <th>Transactions</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Beams To Ground</td>
+        <td>Selection (beams)</td>
+        <td>Summary dialog</td>
+        <td>1</td>
+        <td><span class="status status-sketchy">Sketchy</span></td>
+      </tr>
+      <tr>
+        <td>Join Walls &amp; Floors</td>
+        <td>Selection (floors/roofs/ceilings/foundations)</td>
+        <td>Results dialog</td>
+        <td>1</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Split Floor</td>
+        <td>Selection (compound floors)</td>
+        <td>Layer dialog</td>
+        <td>4 per floor</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Join Beams to Walls</td>
+        <td>Selection (beams/columns/foundations)</td>
+        <td>Results dialog</td>
+        <td>1</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:1.5rem;">
+    <div style="font-weight:700; font-size:0.9rem; color:#1e3a5f; margin-bottom:0.75rem;">Cross-Cutting Observations</div>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>Join commands</strong> (Walls&amp;Floors + Beams) share 90% of their code.
+      Both are well-engineered with per-element error isolation and the join-order retry pattern.
+      A shared helper would eliminate duplication.</li>
+      <li><strong>Split Floor</strong> is impressively complete &mdash; slope arrows, shape editing
+      vertex transfer, and opening recreation with Z-flattening. More complex than Split Wall
+      because floors carry more geometric metadata.</li>
+      <li><strong>Beams To Ground</strong> is the weakest command &mdash; no rollback safety,
+      deletes originals before confirming replacements. Could lose data on partial failure.</li>
+    </ul>
+  </div>
+</section>
+
+</div><!-- /container -->
+</body>
+</html>

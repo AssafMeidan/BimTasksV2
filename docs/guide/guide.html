@@ -1,0 +1,4399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BimTasksV2 — Developer Guide</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .status-needs-improvement { background: #e0e7ff; color: #3730a3; }
+  </style>
+</head>
+<body>
+
+<button class="no-print" onclick="window.print()">Print to PDF</button>
+
+<div class="container">
+
+<!-- ── COVER PAGE ─────────────────────────────────────────── -->
+<div class="cover">
+  <h1>BimTasksV2 — Developer Guide</h1>
+  <div class="subtitle">Revit 2025 Add-in &mdash; Architecture &amp; Command Reference</div>
+  <div class="subtitle">37 Commands &middot; 5 Ribbon Panels &middot; Full Functionality Map</div>
+  <div class="date">March 2026</div>
+  <div class="meta">Stack: .NET 8 &middot; Revit API 2025 &middot; Prism 9 / Unity &middot; WPF &middot; Vosk</div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── TABLE OF CONTENTS ───────────────────────────────────── -->
+<nav class="toc">
+  <h2>Table of Contents</h2>
+
+  <div class="toc-item">
+    <span class="toc-num">1</span>
+    <span class="toc-title"><a href="#ch-architecture" style="color:inherit; text-decoration:none;">Architecture Overview</a></span>
+    <span class="toc-detail">ALC isolation &middot; command flow &middot; initialization &middot; key services</span>
+  </div>
+
+  <div class="toc-item">
+    <span class="toc-num">2</span>
+    <span class="toc-title"><a href="#ch-walls" style="color:inherit; text-decoration:none;">Walls</a></span>
+    <span class="toc-detail">Sync Phases &middot; Copy Linked &middot; Height &middot; Split &middot; Overlaps &middot; Cladding &middot; Trim Corners &middot; Window Families</span>
+  </div>
+
+  <div class="toc-item">
+    <span class="toc-num">3</span>
+    <span class="toc-title"><a href="#ch-structure" style="color:inherit; text-decoration:none;">Structure</a></span>
+    <span class="toc-detail">Beams To Ground &middot; Join Walls &amp; Floors &middot; Split Floor &middot; Join Beams to Walls</span>
+  </div>
+
+  <div class="toc-item">
+    <span class="toc-num">4</span>
+    <span class="toc-title"><a href="#ch-schedules" style="color:inherit; text-decoration:none;">Schedules</a></span>
+    <span class="toc-detail">Export to Excel &middot; Edit in Excel &middot; Import Key Schedules</span>
+  </div>
+
+  <div class="toc-item">
+    <span class="toc-num">5</span>
+    <span class="toc-title"><a href="#ch-boq" style="color:inherit; text-decoration:none;">BOQ (Bill of Quantities)</a></span>
+    <span class="toc-detail">Setup &middot; Create Schedules &middot; AutoFill Qty &middot; Calc Price &middot; Seifei Choze</span>
+  </div>
+
+  <div class="toc-item">
+    <span class="toc-num">6</span>
+    <span class="toc-title"><a href="#ch-tools" style="color:inherit; text-decoration:none;">Tools</a></span>
+    <span class="toc-detail">Filter Tree &middot; Calc Area &middot; Uniformat &middot; Copy From Link &middot; Dockable Panel &middot; Toolbar &middot; Export JSON &middot; Voice &middot; DWG Floors &middot; Filter Legend</span>
+  </div>
+
+  <div class="toc-item">
+    <span class="toc-num">7</span>
+    <span class="toc-title"><a href="#ch-issues" style="color:inherit; text-decoration:none;">Cross-Cutting Issues &amp; Improvements</a></span>
+    <span class="toc-detail">Architectural debt &middot; systemic patterns &middot; recommended fixes</span>
+  </div>
+</nav>
+
+<!-- ── STATUS KEY ──────────────────────────────────────────── -->
+<div class="section">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Status Key &mdash; Used Throughout This Guide</div>
+    </div>
+  </div>
+
+  <div style="display:flex; gap:1.5rem; flex-wrap:wrap;">
+    <div style="display:flex; align-items:center; gap:0.5rem;">
+      <span class="status status-solid">Solid</span>
+      <span style="color:#444; font-size:0.85rem;">Works reliably, no known issues</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:0.5rem;">
+      <span class="status status-sketchy">Sketchy</span>
+      <span style="color:#444; font-size:0.85rem;">Works but has edge cases or incomplete error handling</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:0.5rem;">
+      <span class="status status-broken">Broken / Stub</span>
+      <span style="color:#444; font-size:0.85rem;">Not functional or not yet implemented</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:0.5rem;">
+      <span class="status status-improve">Needs Improvement</span>
+      <span style="color:#444; font-size:0.85rem;">Functional but has clear architectural or UX debt</span>
+    </div>
+  </div>
+
+  <div style="margin-top:1.5rem;">
+    <div style="font-size:0.85rem; color:#6b7280; line-height:1.6;">
+      <strong>Issue cards</strong> appear at the end of each command card when applicable.
+      <span style="display:inline-block; width:12px; height:12px; background:#fff5f5; border:1px solid #fca5a5; border-radius:3px; vertical-align:middle; margin:0 0.2rem;"></span> red = bug or unsafe pattern,
+      <span style="display:inline-block; width:12px; height:12px; background:#eef2ff; border:1px solid #a5b4fc; border-radius:3px; vertical-align:middle; margin:0 0.2rem;"></span> blue = improvement idea.
+    </div>
+  </div>
+</div>
+
+<!-- ── QUICK STATS ─────────────────────────────────────────── -->
+<div class="section">
+  <div class="section-header">
+    <div>
+      <div class="section-title">At a Glance</div>
+    </div>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Panel</th>
+        <th>Commands</th>
+        <th>Key Helpers / Services</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="font-weight:600;">Walls</td>
+        <td>10</td>
+        <td><code>WallSplitterEngine</code> <code>OverlappingWallsDetector</code> <code>CladdingWallCreator</code> <code>WallJoinReplicator</code></td>
+      </tr>
+      <tr>
+        <td style="font-weight:600;">Structure</td>
+        <td>4</td>
+        <td><code>FloorSplitterEngine</code> <code>FloorLayerAnalyzer</code> <code>JoinGeometryUtils</code></td>
+      </tr>
+      <tr>
+        <td style="font-weight:600;">Schedules</td>
+        <td>3</td>
+        <td><code>ScheduleExcelExportService</code> <code>ScheduleExcelRoundtripService</code></td>
+      </tr>
+      <tr>
+        <td style="font-weight:600;">BOQ</td>
+        <td>5</td>
+        <td><code>SharedParameterHelper</code> <code>BOQScheduleBuilder</code></td>
+      </tr>
+      <tr>
+        <td style="font-weight:600;">Tools</td>
+        <td>11+</td>
+        <td><code>LegendBuilder</code> <code>DwgGeometryExtractor</code> <code>DataExtractorService</code> <code>VoskVoiceService</code></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+
+<div class="page-break"></div>
+<a id="ch-architecture"></a>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     SECTION 1 — ARCHITECTURE OVERVIEW
+     ══════════════════════════════════════════════════════════ -->
+<section class="arch-section">
+
+  <div class="section-header">
+    <span class="section-num">1</span>
+    <div>
+      <div class="section-title">Architecture Overview</div>
+      <div class="section-desc">Bird's eye view &mdash; how the plugin boots, isolates itself, and executes commands</div>
+    </div>
+  </div>
+
+  <!-- ── WHY ISOLATION? ──────────────────────────────────── -->
+  <div class="callout">
+    <div class="callout-title">Why Two Worlds?</div>
+    <div class="callout-body">
+      <p>
+        Revit loads all add-ins into a shared <strong>default AssemblyLoadContext</strong>.
+        Other plugins (Enscape, Dynamo, pyRevit) ship their own versions of common DLLs.
+        If BimTasksV2 loaded Prism 9 and Unity directly, it would clash with whatever
+        Prism/DryIoc/Newtonsoft version another add-in already loaded.
+      </p>
+      <p style="margin-bottom:0;">
+        The solution: BimTasksV2 runs in an <strong>isolated ALC</strong> (<code>BimTasksIsolated</code>).
+        Only a thin proxy layer lives in the default context &mdash; it holds no references to
+        Prism, Unity, Serilog, or Vosk. The two worlds communicate through <strong>reflection</strong>
+        and Revit's own API types (which are shared).
+      </p>
+    </div>
+  </div>
+
+  <!-- ── THE TWO ALCs ────────────────────────────────────── -->
+  <div class="diagram-wrap">
+    <div class="diagram-title">The Two Assembly Load Contexts</div>
+    <div class="mermaid">
+graph LR
+  subgraph DEFAULT["Default ALC (Revit's world)"]
+    BA["BimTasksApp\n(IExternalApplication)"]
+    RB["RibbonBuilder"]
+    PC["ProxyCommands\n(IExternalCommand)"]
+  end
+
+  subgraph ISOLATED["Isolated ALC (BimTasksIsolated)"]
+    BS["BimTasksBootstrapper"]
+    UC["Unity Container"]
+    SVC["Services"]
+    HND["Command Handlers"]
+    VM["ViewModels"]
+    VW["Views (WPF)"]
+    EVT["Prism Events"]
+  end
+
+  BA -->|"reflection\n(no type refs)"| BS
+  PC -->|"reflection\n(Activator.CreateInstance)"| HND
+  BS --> UC
+  UC --> SVC
+  UC --> HND
+  UC --> VM
+  VM --> VW
+  SVC --> EVT
+
+  style DEFAULT fill:#f8fafc,stroke:#94a3b8,color:#1e293b
+  style ISOLATED fill:#eff6ff,stroke:#3b82f6,color:#1e293b
+  style BA fill:#1e3a5f,color:#fff
+  style BS fill:#1e40af,color:#fff
+  style UC fill:#7c3aed,color:#fff
+    </div>
+  </div>
+
+  <div class="info-row">
+    <div class="info-box note">
+      <span class="info-label">Default ALC Rule</span>
+      <div class="info-text">
+        <code>BimTasksApp</code>, <code>RibbonBuilder</code>, and all proxy commands must
+        <strong>never</strong> reference Prism, Unity, Serilog, or Vosk types.
+        Only Revit API types and System types are allowed.
+      </div>
+    </div>
+    <div class="info-box gotcha">
+      <span class="info-label">Shared Types</span>
+      <div class="info-text">
+        Revit API DLLs (<code>RevitAPI</code>, <code>RevitAPIUI</code>), WPF framework assemblies,
+        and all <code>System.*</code> assemblies resolve from the default context &mdash; both ALCs
+        see the same types. This is what makes reflection calls possible.
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<div class="page-break"></div>
+
+<!-- ══════════════════════════════════════════════════════════
+     STARTUP LIFECYCLE
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+
+  <div class="section-header">
+    <span class="section-num">1.1</span>
+    <div>
+      <div class="section-title">Startup Lifecycle</div>
+      <div class="section-desc">Three-phase initialization &mdash; what happens and when</div>
+    </div>
+  </div>
+
+  <div class="diagram-wrap">
+    <div class="diagram-title">Initialization Timeline</div>
+    <div class="mermaid">
+sequenceDiagram
+  participant Revit
+  participant BimTasksApp as BimTasksApp<br/>(Default ALC)
+  participant Bootstrapper as BimTasksBootstrapper<br/>(Isolated ALC)
+
+  Note over Revit: Revit starts up
+  Revit->>BimTasksApp: OnStartup(UIControlledApplication)
+
+  rect rgb(239, 246, 255)
+    Note over BimTasksApp,Bootstrapper: Phase 1 — Initialize
+    BimTasksApp->>BimTasksApp: Create BimTasksLoadContext
+    BimTasksApp->>BimTasksApp: Load DLL into isolated ALC
+    BimTasksApp->>Bootstrapper: reflection → Initialize()
+    Bootstrapper->>Bootstrapper: Init Serilog
+    Bootstrapper->>Bootstrapper: Register Prism infrastructure
+    Bootstrapper->>Bootstrapper: Register services & views
+    Bootstrapper->>Bootstrapper: Set ContainerLocator
+  end
+
+  BimTasksApp->>BimTasksApp: RibbonBuilder.Build()
+
+  rect rgb(240, 253, 244)
+    Note over BimTasksApp,Bootstrapper: Phase 2 — Register Dockable Pane
+    BimTasksApp->>Bootstrapper: reflection → RegisterDockablePane()
+    Bootstrapper->>Revit: RegisterDockablePane(id, panel)
+    Bootstrapper-->>BimTasksApp: returns DockablePaneId
+  end
+
+  BimTasksApp->>Revit: Subscribe to Idling (one-shot)
+
+  Note over Revit: Revit becomes idle...
+
+  rect rgb(254, 249, 195)
+    Note over BimTasksApp,Bootstrapper: Phase 3 — OnFirstIdle
+    Revit->>BimTasksApp: Idling event
+    BimTasksApp->>BimTasksApp: Unsubscribe from Idling
+    BimTasksApp->>Bootstrapper: reflection → OnFirstIdle(UIApplication)
+    Bootstrapper->>Bootstrapper: Set UIApplication on RevitContextService
+    Bootstrapper->>Bootstrapper: Create CommandDispatcherService
+    Bootstrapper->>Bootstrapper: Create VoskVoiceCommandService
+    Bootstrapper->>Bootstrapper: Subscribe to ToggleFloatingToolbarEvent
+  end
+
+  Note over Revit: Ready for commands
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="callout-title">Why Three Phases?</div>
+    <div class="callout-body">
+      <ul style="margin:0; padding-left:1.2rem;">
+        <li style="margin-bottom:0.5rem;">
+          <strong>Phase 1 (Initialize):</strong> No <code>UIApplication</code> available yet &mdash;
+          only <code>UIControlledApplication</code>. Can register services and build UI,
+          but cannot create <code>ExternalEvent</code> or access active documents.
+        </li>
+        <li style="margin-bottom:0.5rem;">
+          <strong>Phase 2 (Dockable Pane):</strong> Must happen during <code>OnStartup</code> &mdash;
+          Revit does not allow pane registration after the startup window closes.
+        </li>
+        <li style="margin-bottom:0;">
+          <strong>Phase 3 (OnFirstIdle):</strong> First time we have a real <code>UIApplication</code>.
+          <code>ExternalEvent.Create()</code> must be called on the Revit main thread, so this
+          is where <code>CommandDispatcherService</code> gets created.
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Key files -->
+  <h4 style="font-size:0.82rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#6b7280; margin-top:1.5rem; margin-bottom:0.5rem;">Key Files</h4>
+  <div class="key-files">
+    <span class="key-file">BimTasksApp.cs</span>
+    <span class="key-file">Infrastructure/BimTasksBootstrapper.cs</span>
+    <span class="key-file">Infrastructure/BimTasksLoadContext.cs</span>
+  </div>
+
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     COMMAND EXECUTION FLOW
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+
+  <div class="section-header">
+    <span class="section-num">1.2</span>
+    <div>
+      <div class="section-title">Command Execution Flow</div>
+      <div class="section-desc">What happens when a user clicks a ribbon button</div>
+    </div>
+  </div>
+
+  <div class="diagram-wrap">
+    <div class="diagram-title">Ribbon Click &rarr; Handler Execution</div>
+    <div class="mermaid">
+graph LR
+  A["User clicks\nribbon button"] --> B["Revit calls\nProxyCommand.Execute()"]
+  B --> C["Load handler type\nfrom isolated ALC"]
+  C --> D["Activator.CreateInstance()\ncreates handler"]
+  D --> E["Reflection invoke\nHandler.Execute(UIApplication)"]
+  E --> F["Handler runs\n(transactions, UI, etc.)"]
+
+  style A fill:#f1f5f9,stroke:#94a3b8
+  style B fill:#1e3a5f,color:#fff
+  style C fill:#7c3aed,color:#fff
+  style E fill:#1e40af,color:#fff
+  style F fill:#166534,color:#fff
+    </div>
+  </div>
+
+  <p style="font-size:0.88rem; color:#374151; margin:1rem 0;">
+    Every ribbon button maps to a <strong>proxy command</strong> in the default ALC.
+    The proxy is a one-liner &mdash; it just declares the handler's class name.
+    All actual logic lives in the handler inside the isolated ALC.
+  </p>
+
+  <div style="background:#f8fafc; border:1px solid #e5e7eb; border-radius:8px; padding:1rem; margin:1rem 0; font-family:'JetBrains Mono',monospace; font-size:0.82rem; color:#1e293b; line-height:1.7;">
+    <span style="color:#6b7280;">// Default ALC — proxy command (one per ribbon button)</span><br/>
+    <span style="color:#7c3aed;">[Transaction(TransactionMode.Manual)]</span><br/>
+    <span style="color:#1e40af;">public class</span> SplitWallCommand : <span style="color:#1e40af;">ProxyCommand</span><br/>
+    { <span style="color:#1e40af;">protected override string</span> HandlerTypeName => <span style="color:#166534;">"SplitWallHandler"</span>; }<br/>
+    <br/>
+    <span style="color:#6b7280;">// Isolated ALC — the real handler</span><br/>
+    <span style="color:#1e40af;">public class</span> SplitWallHandler : <span style="color:#1e40af;">ICommandHandler</span><br/>
+    { <span style="color:#1e40af;">public void</span> Execute(<span style="color:#1e40af;">UIApplication</span> app) { <span style="color:#6b7280;">/* all the work */</span> } }
+  </div>
+
+  <div class="info-row">
+    <div class="info-box warning">
+      <span class="info-label">Gotcha</span>
+      <div class="info-text">
+        Handlers are created via <code>Activator.CreateInstance()</code> &mdash; they must have
+        a parameterless constructor. Dependencies are resolved inside <code>Execute()</code>
+        via <code>ContainerLocator.Container.Resolve&lt;T&gt;()</code>.
+      </div>
+    </div>
+    <div class="info-box note">
+      <span class="info-label">Proxy Files</span>
+      <div class="info-text">
+        Proxy commands are grouped by panel:
+        <code>WallCommands.cs</code>,
+        <code>StructureCommands.cs</code>,
+        <code>ScheduleCommands.cs</code>,
+        <code>BOQCommands.cs</code>,
+        <code>ToolCommands.cs</code>.
+      </div>
+    </div>
+  </div>
+
+  <div class="key-files" style="margin-top:1rem;">
+    <span class="key-file">Commands/Infrastructure/ProxyCommand.cs</span>
+    <span class="key-file">Commands/Proxies/*.cs</span>
+    <span class="key-file">Commands/Handlers/*.cs</span>
+  </div>
+
+</section>
+
+<div class="page-break"></div>
+
+<!-- ══════════════════════════════════════════════════════════
+     THREADING & COMMAND DISPATCHER
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+
+  <div class="section-header">
+    <span class="section-num">1.3</span>
+    <div>
+      <div class="section-title">Threading &amp; Command Dispatcher</div>
+      <div class="section-desc">How WPF events safely reach the Revit API</div>
+    </div>
+  </div>
+
+  <p style="font-size:0.88rem; color:#374151; margin-bottom:1rem;">
+    Revit's API is <strong>single-threaded</strong> &mdash; it can only be called from the main thread
+    during specific windows (inside <code>IExternalCommand.Execute()</code> or
+    <code>IExternalEventHandler.Execute()</code>). WPF buttons, voice commands, and dockable
+    panel interactions run on separate threads. The <code>CommandDispatcherService</code> bridges this gap.
+  </p>
+
+  <div class="diagram-wrap">
+    <div class="diagram-title">Thread-Safe Command Queue</div>
+    <div class="mermaid">
+sequenceDiagram
+  participant WPF as WPF Thread<br/>(button click / voice)
+  participant Queue as ConcurrentQueue
+  participant Revit as Revit Main Thread
+
+  WPF->>Queue: dispatcher.Enqueue(action)
+  WPF->>Revit: externalEvent.Raise()
+  Note over Revit: Revit becomes idle...
+  Revit->>Queue: Drain all queued actions
+  Queue-->>Revit: action(UIApplication)
+  Revit->>Revit: Execute on main thread
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="callout-title">When Is the Dispatcher Needed?</div>
+    <div class="callout-body">
+      <ul style="margin:0; padding-left:1.2rem;">
+        <li style="margin-bottom:0.3rem;"><strong>Needed:</strong> Floating toolbar button clicks, dockable panel actions, voice commands &mdash; anything triggered from WPF or a background thread.</li>
+        <li style="margin-bottom:0;"><strong>Not needed:</strong> Ribbon button clicks &mdash; these already run inside <code>IExternalCommand.Execute()</code> on Revit's main thread.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="key-files" style="margin-top:1rem;">
+    <span class="key-file">Services/CommandDispatcherService.cs</span>
+    <span class="key-file">Services/ICommandDispatcherService.cs</span>
+  </div>
+
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     EVENT SYSTEM
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+
+  <div class="section-header">
+    <span class="section-num">1.4</span>
+    <div>
+      <div class="section-title">Event System</div>
+      <div class="section-desc">Prism EventAggregator for decoupled UI coordination</div>
+    </div>
+  </div>
+
+  <p style="font-size:0.88rem; color:#374151; margin-bottom:1rem;">
+    Handlers and ViewModels communicate through Prism's <code>EventAggregator</code> &mdash;
+    publishers don't need a reference to subscribers. Four events are defined:
+  </p>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Event</th>
+        <th>Payload</th>
+        <th>Published By</th>
+        <th>Consumed By</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>ToggleFloatingToolbarEvent</code></td>
+        <td><code>object</code></td>
+        <td>ToggleToolbarHandler</td>
+        <td>BimTasksBootstrapper (creates/toggles FloatingToolbarWindow)</td>
+      </tr>
+      <tr>
+        <td><code>SwitchDockablePanelEvent</code></td>
+        <td><code>string</code> (view name)</td>
+        <td>ShowFilterTreeWindowHandler, CheckSelectedWallsHandler</td>
+        <td>BimTasksDockablePanelViewModel (navigates region)</td>
+      </tr>
+      <tr>
+        <td><code>ResetFilterTreeEvent</code></td>
+        <td><code>object</code></td>
+        <td>FilterTreeViewModel (after rebuild)</td>
+        <td>FilterTreeViewModel (re-initializes tree)</td>
+      </tr>
+      <tr>
+        <td><code>CalculateElementsEvent</code></td>
+        <td><code>object</code></td>
+        <td>CheckSelectedWallsHandler</td>
+        <td>ElementCalculationViewModel (runs calculation)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="info-row">
+    <div class="info-box gotcha">
+      <span class="info-label">Prism 9 Threading Gotcha</span>
+      <div class="info-text">
+        In Prism 9, <code>ThreadOption.UIThread</code> is <strong>async</strong> (unlike Prism 8).
+        For synchronous delivery, use <code>ThreadOption.PublisherThread</code>.
+        The floating toolbar subscription uses this to avoid race conditions.
+      </div>
+    </div>
+  </div>
+
+  <div class="key-files" style="margin-top:1rem;">
+    <span class="key-file">Events/BimTasksEvents.cs</span>
+  </div>
+
+</section>
+
+<div class="page-break"></div>
+
+<!-- ══════════════════════════════════════════════════════════
+     KEY SERVICES
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+
+  <div class="section-header">
+    <span class="section-num">1.5</span>
+    <div>
+      <div class="section-title">Key Services</div>
+    </div>
+  </div>
+
+  <div class="service-grid">
+
+    <div class="service-card">
+      <div class="service-name">RevitContextService</div>
+      <div class="service-desc">
+        Holds <code>UIApplication</code> (set in OnFirstIdle).
+        <code>UIDocument</code> is a <strong>computed property</strong> that always returns the
+        active document &mdash; never cached, because the user can switch documents.
+      </div>
+    </div>
+
+    <div class="service-card">
+      <div class="service-name">CommandDispatcherService</div>
+      <div class="service-desc">
+        Thread-safe action queue using <code>ExternalEvent</code>.
+        Bridges WPF/voice threads to the Revit main thread.
+        See section 1.3.
+      </div>
+    </div>
+
+    <div class="service-card">
+      <div class="service-name">ScheduleExcelExportService</div>
+      <div class="service-desc">
+        Professional Excel export using EPPlus. Handles multi-schedule export
+        (single file or separate files), column formatting, merged headers, and
+        auto-fit. Used by the Export Schedule command.
+      </div>
+    </div>
+
+    <div class="service-card">
+      <div class="service-name">ScheduleExcelRoundtripService</div>
+      <div class="service-desc">
+        Exports a schedule to a temp Excel file, opens it for editing,
+        then reimports changes on user confirmation. Used by the Edit In Excel command.
+      </div>
+    </div>
+
+    <div class="service-card">
+      <div class="service-name">DataExtractorService</div>
+      <div class="service-desc">
+        Extracts all model elements into <code>BimElementDto</code> objects and serializes
+        to JSON. Includes validation comparison against Revit schedule totals.
+        Used by the Web App Data Extractor command.
+      </div>
+    </div>
+
+    <div class="service-card">
+      <div class="service-name">VoskVoiceCommandService</div>
+      <div class="service-desc">
+        Offline voice recognition using Vosk + NAudio. Grammar-constrained to recognize
+        command names. Optional &mdash; creation is wrapped in try/catch so the plugin works
+        even if Vosk model files are missing.
+      </div>
+    </div>
+
+    <div class="service-card">
+      <div class="service-name">ElementCalculationService</div>
+      <div class="service-desc">
+        Calculates area and volume for selected Revit elements.
+        Results are displayed in the dockable panel's ElementCalculationView.
+      </div>
+    </div>
+
+    <div class="service-card">
+      <div class="service-name">UniformatDataService</div>
+      <div class="service-desc">
+        Provides Uniformat classification code lookups.
+        Displayed in a modeless window for reference.
+      </div>
+    </div>
+
+  </div>
+
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     RIBBON LAYOUT
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+
+  <div class="section-header">
+    <span class="section-num">1.6</span>
+    <div>
+      <div class="section-title">Ribbon Layout</div>
+      <div class="section-desc">How commands are organized in the Revit ribbon</div>
+    </div>
+  </div>
+
+  <div class="diagram-wrap">
+    <div class="diagram-title">BimTasks Ribbon Tab &mdash; 5 Panels</div>
+    <div class="mermaid">
+graph LR
+  subgraph TAB["BimTasks Tab"]
+    direction LR
+    subgraph P1["Walls"]
+      W1["Sync Phases"]
+      W2["Copy Linked"]
+      W3["Wall To Floors"]
+      W4["Wall Height"]
+      W5["Split Wall"]
+      W6["Detect Overlaps"]
+      W7["Cladding ▾"]
+      W8["Window Families"]
+    end
+    subgraph P2["Structure"]
+      S1["Beams To Ground"]
+      S2["Join Walls & Floors"]
+      S3["Split Floor"]
+    end
+    subgraph P3["Schedules"]
+      SC1["Export Schedule"]
+      SC2["Edit In Excel"]
+      SC3["Import Key Schedules"]
+    end
+    subgraph P4["BOQ"]
+      B1["BOQ Setup"]
+      B2["BOQ Schedules"]
+      B3["BOQ AutoFill"]
+      B4["BOQ Calc Price"]
+      B5["Contract Sections"]
+    end
+    subgraph P5["Tools"]
+      T1["Create Similar ▾"]
+      T2["Filter Tree"]
+      T3["Calc Area"]
+      T4["Uniformat"]
+      T5["Copy From Link"]
+      T6["...+6 more"]
+    end
+  end
+
+  style TAB fill:#f8fafc,stroke:#94a3b8
+  style P1 fill:#dbeafe,stroke:#3b82f6
+  style P2 fill:#d1fae5,stroke:#10b981
+  style P3 fill:#fef3c7,stroke:#f59e0b
+  style P4 fill:#ede9fe,stroke:#8b5cf6
+  style P5 fill:#fce7f3,stroke:#ec4899
+    </div>
+  </div>
+
+  <p style="font-size:0.85rem; color:#6b7280; margin-top:0.5rem;">
+    <strong>▾</strong> = split button (dropdown with sub-commands).
+    Cladding has 3 variants (Both/External/Internal).
+    Create Similar has 2 (Create Similar + Piles From DWG).
+  </p>
+
+  <div class="key-files" style="margin-top:1rem;">
+    <span class="key-file">Ribbon/RibbonBuilder.cs</span>
+    <span class="key-file">Ribbon/RibbonConstants.cs</span>
+  </div>
+
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     ARCHITECTURE ISSUES
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+
+  <div class="section-header">
+    <span class="section-num">1.7</span>
+    <div>
+      <div class="section-title">Architecture Notes &amp; Observations</div>
+      <div class="section-desc">Patterns to be aware of when working in this codebase</div>
+    </div>
+  </div>
+
+  <div class="improve-card">
+    <div class="improve-title">Reflection-Heavy Bridge</div>
+    <div class="improve-body">
+      <p>
+        All communication between default and isolated ALC goes through reflection &mdash;
+        no compile-time type safety. If a handler class is renamed or its <code>Execute</code>
+        method signature changes, the error only surfaces at runtime when the user clicks
+        the button. A shared interface assembly (loaded in both ALCs) could provide
+        compile-time guarantees.
+      </p>
+    </div>
+  </div>
+
+  <div class="improve-card">
+    <div class="improve-title">Service Resolution Inside Execute()</div>
+    <div class="improve-body">
+      <p>
+        Handlers resolve dependencies via <code>ContainerLocator.Container.Resolve&lt;T&gt;()</code>
+        inside their <code>Execute()</code> method (service locator pattern). This works but
+        makes dependencies invisible &mdash; you can't tell what a handler needs without reading
+        the method body. Constructor injection would be cleaner but requires changes to the
+        proxy infrastructure.
+      </p>
+    </div>
+  </div>
+
+  <div class="improve-card">
+    <div class="improve-title">Floating Toolbar Lifecycle</div>
+    <div class="improve-body">
+      <p>
+        The floating toolbar window is created and cached in <code>BimTasksBootstrapper</code>
+        as a field. Toggling shows/hides it. If the window is closed via the X button (by the
+        user or Windows), the cached reference may point to a disposed window. The toolbar
+        handler should check <code>IsLoaded</code> before toggling visibility.
+      </p>
+    </div>
+  </div>
+
+  <div class="callout" style="margin-top:1.5rem;">
+    <div class="callout-title">What Works Well</div>
+    <div class="callout-body">
+      <ul style="margin:0; padding-left:1.2rem;">
+        <li style="margin-bottom:0.3rem;">
+          ALC isolation is solid &mdash; no DLL conflicts reported with Enscape, Dynamo, or pyRevit.
+        </li>
+        <li style="margin-bottom:0.3rem;">
+          The <code>CommandDispatcherService</code> pattern is clean and correctly handles
+          the Revit threading model.
+        </li>
+        <li style="margin-bottom:0;">
+          Three-phase initialization correctly respects Revit's registration windows.
+        </li>
+      </ul>
+    </div>
+  </div>
+
+</section>
+
+
+<div class="page-break"></div>
+<a id="ch-walls"></a>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     SECTION 2 — WALLS
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-header">
+    <span class="section-num">2</span>
+    <div>
+      <div class="section-title">Walls</div>
+      <div class="section-desc">10 commands &mdash; phase sync, copy, height, split, overlaps, cladding, trim corners, window families</div>
+    </div>
+  </div>
+
+  <p style="font-size:0.88rem; color:#374151; margin-bottom:1rem;">
+    The Walls panel is the largest group. It covers the full lifecycle of wall manipulation:
+    copying from links, adjusting geometry, splitting compound walls into layers,
+    detecting duplicates, and adding cladding. The <strong>Split Wall &rarr; Trim Corners</strong>
+    pipeline is the most complex multi-step workflow in the entire add-in.
+  </p>
+</section>
+
+<!-- ── 2.1 SYNC PHASES ────────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Sync Phases</span>
+      <span class="cmd-ribbon">Ribbon: Walls &rarr; Sync Phases</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Sets the <code>PHASE_CREATED</code> parameter of selected windows and doors to match
+      their host wall's phase. Useful after walls are reassigned to different phases &mdash;
+      the hosted elements don't follow automatically.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Select one or more windows/doors (or select walls that host them).</li>
+      <li>Click <strong>Sync Phases</strong>.</li>
+      <li>The handler filters selection to windows and doors only.</li>
+      <li>For each element, reads the host wall's <code>PHASE_CREATED</code> and copies it to the element.</li>
+      <li>Elements with read-only phase parameters are skipped and reported.</li>
+      <li>Shows summary: "Updated X elements, Y failed."</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/SetSelectedWindowAndDoorPhaseToWallPhaseHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Note</span>
+        <div class="info-text">Does not validate that the selection is non-empty &mdash; will silently show "0 updated" if nothing is selected.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 2.2 COPY LINKED WALLS ──────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Copy Linked Walls</span>
+      <span class="cmd-ribbon">Ribbon: Walls &rarr; Copy Linked Walls</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Copies all walls from a selected Revit link instance into the host document,
+      applying the link's transform so they land in the correct position.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Copy Linked Walls</strong>.</li>
+      <li>Pick a Revit link instance in the viewport (custom <code>LinkSelectionFilter</code>).</li>
+      <li>Handler retrieves all walls from the linked document.</li>
+      <li>Uses <code>ElementTransformUtils.CopyElements()</code> with the link's total transform.</li>
+      <li>Newly copied walls are selected in the UI.</li>
+      <li>Shows count summary.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/CopyLinkedWallsHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box tip">
+        <span class="info-label">Good</span>
+        <div class="info-text">Handles user cancellation (Esc) gracefully via <code>OperationCanceledException</code>.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 2.3 ADJUST WALL HEIGHT TO FLOORS ───────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Wall To Floors</span>
+      <span class="cmd-ribbon">Ribbon: Walls &rarr; Wall To Floors</span>
+    </div>
+    <span class="status status-sketchy">Sketchy</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Auto-adjusts selected walls' base offset and top to sit flush against the nearest
+      floors above and below. Uses <code>ReferenceIntersector</code> to cast rays from
+      wall endpoints to find floor surfaces.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Select one or more walls.</li>
+      <li>Click <strong>Wall To Floors</strong>.</li>
+      <li>Handler finds (or falls back to) the default <code>{3D}</code> view for ray casting.</li>
+      <li>For each wall:
+        <ul>
+          <li>Casts rays downward from wall base &rarr; finds floor below &rarr; adjusts base offset.</li>
+          <li>Casts rays upward from wall top &rarr; finds floor above &rarr; adjusts top offset or unconnected height.</li>
+        </ul>
+      </li>
+      <li>Shows completion summary.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/AdjustWallHeightToFloorsHandler.cs</span>
+    </div>
+
+    <div class="issue-card" style="margin-top:1rem;">
+      <div class="issue-title">No Per-Wall Error Handling</div>
+      <div class="issue-body">
+        <p>The main loop has no try-catch per wall. If one wall has invalid geometry or a
+        null <code>LocationCurve</code>, the entire operation crashes. Each iteration should
+        be wrapped individually.</p>
+      </div>
+    </div>
+    <div class="improve-card">
+      <div class="improve-title">Assumes Linear Walls Only</div>
+      <div class="improve-body">
+        <p>Ray casting uses start/end points of the wall curve. Curved walls will only have
+        rays at their endpoints, missing the mid-arc. Not necessarily wrong, but worth knowing.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 2.4 CHANGE WALL HEIGHT ─────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Wall Height</span>
+      <span class="cmd-ribbon">Ribbon: Walls &rarr; Wall Height</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Shows a dialog to manually add height to the top and/or bottom of selected walls.
+      Defaults to +25cm top, +30cm bottom (common Israeli construction adjustment values).
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Select walls.</li>
+      <li>Click <strong>Wall Height</strong>.</li>
+      <li>Dialog appears with checkboxes for "Add to Top" / "Add to Bottom" and amount fields (cm).</li>
+      <li>Click OK &mdash; ViewModel processes selected walls and adjusts parameters.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/ChangeWallHeightHandler.cs</span>
+      <span class="key-file">Views/ChangeWallHeightDialog.xaml</span>
+      <span class="key-file">Views/ChangeWallHeightDialog.xaml.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Architecture</span>
+        <div class="info-text">This is a pure WPF dialog (no ViewModel class) &mdash; the code-behind
+        sets <code>DataContext = this</code> and exposes properties directly.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── 2.5 SPLIT WALL ─────────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Split Wall</span>
+      <span class="cmd-ribbon">Ribbon: Walls &rarr; Split Wall</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Splits a compound (multi-layer) wall into individual single-layer walls. Each layer
+      becomes a separate wall, offset to its correct position. Hosted elements (doors, windows)
+      are transferred to the designated target layer. After splitting, saves results to JSON
+      for the <strong>Trim Corners</strong> follow-up command.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Select one or more compound walls (non-compound walls are filtered out).</li>
+      <li>Click <strong>Split Wall</strong>.</li>
+      <li>Dialog shows layer breakdown: function, material, thickness, and a type-assignment combo per layer.</li>
+      <li>For each layer, choose an existing WallType or select <strong>Auto-Create</strong> (creates a new type matching the layer's thickness).</li>
+      <li>Choose which layer should receive hosted elements (Auto = thickest structural layer, or manual pick).</li>
+      <li>Choose scope: selected walls only, or all walls of the same type in the project.</li>
+      <li>Click OK &mdash; engine runs a 4-transaction pipeline per wall.</li>
+      <li>Results saved to <code>split_results.json</code>. Summary dialog instructs you to run <strong>Trim Corners</strong> next.</li>
+    </ol>
+
+    <div class="diagram-wrap">
+      <div class="diagram-title">Split Wall &mdash; 4-Transaction Pipeline (per wall)</div>
+      <div class="mermaid">
+graph LR
+  A["Record joins\n& geometry"] --> B["Tx 1:\nCreate replacement\nwalls (one per layer)"]
+  B --> C["Tx 2:\nTransfer hosted\nelements to target"]
+  C --> D["Tx 3:\nDelete original\ncompound wall"]
+  D --> E["Tx 4:\nRe-establish\ngeometry joins"]
+  E --> F["Return\nSplitResult"]
+
+  style A fill:#f1f5f9,stroke:#94a3b8
+  style B fill:#1e3a5f,color:#fff
+  style C fill:#7c3aed,color:#fff
+  style D fill:#b91c1c,color:#fff
+  style E fill:#166534,color:#fff
+  style F fill:#f1f5f9,stroke:#94a3b8
+      </div>
+    </div>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/SplitWallHandler.cs</span>
+      <span class="key-file">Helpers/WallSplitter/WallSplitterEngine.cs</span>
+      <span class="key-file">Helpers/WallSplitter/CompoundLayerAnalyzer.cs</span>
+      <span class="key-file">Helpers/WallSplitter/WallJoinReplicator.cs</span>
+      <span class="key-file">Views/WallSplitterDialog.xaml</span>
+    </div>
+
+    <div class="callout" style="margin-top:1rem;">
+      <div class="callout-title">CompoundLayerAnalyzer &mdash; How Offsets Work</div>
+      <div class="callout-body">
+        <p>Each layer's center offset is computed from the wall's <strong>centerline</strong>
+        (ignoring <code>WALL_KEY_REF_PARAM</code>). Formula:
+        <code>centerOffset = (totalWidth/2) - (runningDistance + thickness/2)</code>.
+        Positive offset = toward exterior = <code>wall.Orientation</code> direction.
+        Zero-thickness membrane layers are skipped.</p>
+      </div>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box warning">
+        <span class="info-label">Revit Gotcha</span>
+        <div class="info-text"><code>TransactionGroup.Assimilate()</code> invalidates in-memory Element references.
+        The engine stores <code>ElementId</code> values and re-fetches after assimilation.</div>
+      </div>
+      <div class="info-box gotcha">
+        <span class="info-label">File Dependency</span>
+        <div class="info-text">Results are saved to <code>split_results.json</code> in the plugin DLL directory.
+        If the directory is not writable (e.g., locked by another process), the save fails silently and
+        Trim Corners won't work.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 2.6 TRIM WALL CORNERS ──────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Trim Corners</span>
+      <span class="cmd-ribbon">Dockable Panel &rarr; Trim Corners button</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      The second step of the Split Wall pipeline. After walls are split into layers,
+      the replacement walls don't connect at corners. This command reads the JSON output
+      from Split Wall and cross-joins replacement walls at their intersection points.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Run <strong>Split Wall</strong> first (produces <code>split_results.json</code>).</li>
+      <li>Click <strong>Trim Corners</strong> in the dockable panel.</li>
+      <li>Handler reads JSON, re-fetches walls from document (validates they still exist).</li>
+      <li>Two-pass corner trimming:
+        <ul>
+          <li><strong>Pass 1:</strong> Join replacement walls between split groups by matching layer index (outer&harr;outer, inner&harr;inner).</li>
+          <li><strong>Pass 2:</strong> Trim each replacement against nearby unsplit neighbor walls.</li>
+        </ul>
+      </li>
+      <li>JSON file is deleted after success.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/TrimWallCornersHandler.cs</span>
+      <span class="key-file">Helpers/WallSplitter/WallJoinReplicator.cs</span>
+      <span class="key-file">Views/TrimCornersView.xaml</span>
+    </div>
+
+    <div class="callout" style="margin-top:1rem;">
+      <div class="callout-title">Corner Detection Algorithm</div>
+      <div class="callout-body">
+        <p>Uses 2D line-line intersection on wall centerlines. An intersection is considered
+        a "corner" if the intersection point is within <strong>500mm</strong> of an endpoint
+        on <strong>both</strong> walls. Parallel walls or distant intersections are ignored.
+        End-join states are toggled (allow&rarr;disallow&rarr;allow) to force geometry refresh.</p>
+      </div>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box warning">
+        <span class="info-label">Dependency</span>
+        <div class="info-text">Completely depends on <code>split_results.json</code> from the Split Wall step.
+        If the file is missing, shows "Run Split Wall first."</div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">Thread Safety</span>
+        <div class="info-text">Runs via <code>CommandDispatcherService</code> (queued from the dockable panel button),
+        not directly from a ribbon command.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── 2.7 DETECT OVERLAPPING WALLS ───────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Detect Overlaps</span>
+      <span class="cmd-ribbon">Ribbon: Walls &rarr; Detect Overlaps</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Finds walls of the same type that overlap each other. Groups them, calculates
+      overlap percentage, and lets you highlight, unjoin, or delete the duplicates.
+      100% overlaps (exact duplicates) sort to the top.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Optionally select walls to scan (if none selected, scans all walls in active view).</li>
+      <li>Click <strong>Detect Overlaps</strong>.</li>
+      <li>Detector groups walls by type, then checks pairwise:
+        <ul>
+          <li>Are they parallel? (angular tolerance ~1&deg;)</li>
+          <li>Is perpendicular distance &lt; 50% of wall width?</li>
+          <li>Same base level?</li>
+          <li>Overlap length &ge; 50mm?</li>
+        </ul>
+      </li>
+      <li>Overlap % computed via 3D solid boolean intersection (falls back to 2D estimate if geometry fails).</li>
+      <li>Results dialog shows groups with: overlap%, type, wall count, IDs, and suggested "Keep" wall.</li>
+      <li>Choose action:
+        <ul>
+          <li><strong>Highlight:</strong> Selects and temporarily isolates overlapping walls.</li>
+          <li><strong>Unjoin:</strong> Unjoins all pairs in each group.</li>
+          <li><strong>Delete Duplicates:</strong> Keeps the wall with the most hosted elements, deletes the rest.</li>
+        </ul>
+      </li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/DetectOverlappingWallsHandler.cs</span>
+      <span class="key-file">Helpers/OverlappingWallDetector/OverlappingWallsDetector.cs</span>
+      <span class="key-file">Views/OverlappingWallsResultDialog.xaml</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box tip">
+        <span class="info-label">Design Strength</span>
+        <div class="info-text">
+          Boolean geometry operation (<code>BooleanOperationsUtils</code>) wrapped in try-catch
+          with automatic fallback to 2D width-based estimate. Handles degenerate geometry gracefully.
+        </div>
+      </div>
+      <div class="info-box warning">
+        <span class="info-label">Performance</span>
+        <div class="info-text">
+          Pairwise comparison within each type group is O(n&sup2;). Fine for typical projects,
+          but could be slow with hundreds of walls of the same type.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 2.8/2.9/2.10 CLADDING ──────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Wall Cladding (3 variants)</span>
+      <span class="cmd-ribbon">Ribbon: Walls &rarr; Cladding &blacktriangledown; (Both / External / Internal)</span>
+    </div>
+    <span class="status status-sketchy">Sketchy</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Adds cladding (chipuy) walls parallel to selected walls. Three variants in a split button:
+      <strong>Both Sides</strong>, <strong>External Only</strong>, and <strong>Internal Only</strong>.
+      Each creates offset walls using predefined cladding wall types, then joins geometry and
+      connects end-join corners.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click one of the three cladding buttons.</li>
+      <li>Interactive wall picker &mdash; select walls to clad.</li>
+      <li>For each wall:
+        <ul>
+          <li>Calculates offset from wall orientation and thickness.</li>
+          <li>Creates parallel cladding walls at computed positions.</li>
+          <li>Sets location line: <code>FinishFaceInterior</code> (external) or <code>FinishFaceExterior</code> (internal).</li>
+          <li>Copies parameters from original wall.</li>
+        </ul>
+      </li>
+      <li>Second transaction: joins cladding walls to originals.</li>
+      <li>Third transaction: connects end-join corners between cladding segments.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/AddChipuyToWallHandler.cs</span>
+      <span class="key-file">Commands/Handlers/AddChipuyToExternalWallHandler.cs</span>
+      <span class="key-file">Commands/Handlers/AddChipuyToInternalWallHandler.cs</span>
+      <span class="key-file">Helpers/Cladding/CladdingWallCreator.cs</span>
+    </div>
+
+    <div class="issue-card" style="margin-top:1rem;">
+      <div class="issue-title">Hardcoded Wall Type Names</div>
+      <div class="issue-body">
+        <p>
+          <code>CladdingWallCreator</code> resolves cladding types by name (<code>"w1"</code> for external,
+          <code>"w2"</code> for internal). If these types don't exist in the project, it throws
+          <code>InvalidOperationException</code> with no recovery path. Should either prompt for
+          type selection or create the types automatically.
+        </p>
+      </div>
+    </div>
+    <div class="improve-card">
+      <div class="improve-title">Curved Walls Not Supported</div>
+      <div class="improve-body">
+        <p>Offset calculation assumes linear wall curves. Curved walls will get incorrect
+        cladding placement (the offset vector is computed from <code>wall.Orientation</code>,
+        which is a single direction).</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── 2.11 WINDOW FAMILIES ───────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Window Families</span>
+      <span class="cmd-ribbon">Ribbon: Walls &rarr; Window Families</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Opens a dialog for creating and managing window family types. Lets you define
+      window dimensions and create new <code>FamilySymbol</code> types from an existing
+      window family.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Window Families</strong>.</li>
+      <li>Dialog shows existing window families and their types.</li>
+      <li>Define new type parameters (width, height, sill height).</li>
+      <li>Click Create &mdash; new symbol is duplicated from the base family and parameters are set.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Views/CreateWindowFamiliesDialog.xaml</span>
+      <span class="key-file">Views/CreateWindowFamiliesDialog.xaml.cs</span>
+      <span class="key-file">Models/WindowFamilyModel.cs</span>
+      <span class="key-file">Models/WindowSymbolModel.cs</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     CHAPTER SUMMARY
+     ══════════════════════════════════════════════════════════ -->
+<section class="section" style="margin-top:2rem;">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Walls &mdash; Summary</div>
+    </div>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Command</th>
+        <th>Input</th>
+        <th>UI</th>
+        <th>Transactions</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Sync Phases</td>
+        <td>Selection (W/D)</td>
+        <td>Summary dialog</td>
+        <td>1</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Copy Linked Walls</td>
+        <td>Interactive pick</td>
+        <td>Pick + summary</td>
+        <td>1</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Wall To Floors</td>
+        <td>Selection (walls)</td>
+        <td>Summary dialog</td>
+        <td>1</td>
+        <td><span class="status status-sketchy">Sketchy</span></td>
+      </tr>
+      <tr>
+        <td>Wall Height</td>
+        <td>Selection (walls)</td>
+        <td>Parameter dialog</td>
+        <td>1 (via VM)</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Split Wall</td>
+        <td>Selection (compound)</td>
+        <td>Layer dialog</td>
+        <td>4 per wall</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Trim Corners</td>
+        <td>JSON from Split</td>
+        <td>Button in panel</td>
+        <td>1</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Detect Overlaps</td>
+        <td>Selection or view</td>
+        <td>Results dialog</td>
+        <td>1 per action</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Cladding (x3)</td>
+        <td>Interactive pick</td>
+        <td>None</td>
+        <td>2-3</td>
+        <td><span class="status status-sketchy">Sketchy</span></td>
+      </tr>
+      <tr>
+        <td>Window Families</td>
+        <td>None</td>
+        <td>Create dialog</td>
+        <td>1 per type</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:1.5rem;">
+    <div style="font-weight:700; font-size:0.9rem; color:#1e3a5f; margin-bottom:0.75rem;">Cross-Cutting Observations</div>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>Split Wall + Trim Corners</strong> is the most robust pipeline in the codebase &mdash;
+      4-transaction design with rollback, hosted element transfer, join replication, and a two-pass
+      corner algorithm. Well-engineered.</li>
+      <li><strong>Cladding</strong> is the weakest &mdash; hardcoded type names, no curved wall support,
+      three near-identical handler classes that could be a single handler with a mode parameter.</li>
+      <li><strong>All wall handlers</strong> assume linear walls. Curved wall support is not present
+      anywhere in this panel.</li>
+    </ul>
+  </div>
+</section>
+
+
+<div class="page-break"></div>
+<a id="ch-structure"></a>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     SECTION 3 — STRUCTURE
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-header">
+    <span class="section-num">3</span>
+    <div>
+      <div class="section-title">Structure</div>
+      <div class="section-desc">4 commands &mdash; beams, geometry joins, floor splitting</div>
+    </div>
+  </div>
+
+  <p style="font-size:0.88rem; color:#374151; margin-bottom:1rem;">
+    The Structure panel handles structural element manipulation: relocating beams,
+    joining geometry between walls and floors/beams, and splitting compound floors.
+    The two "Join" commands share a near-identical pattern (intersection filter &rarr;
+    pairwise join with retry) and are the most robust handlers in the panel.
+  </p>
+</section>
+
+<!-- ── 3.1 BEAMS TO GROUND ────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Beams To Ground</span>
+      <span class="cmd-ribbon">Ribbon: Structure &rarr; Beams To Ground</span>
+    </div>
+    <span class="status status-sketchy">Sketchy</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Recreates selected beams at Level 0 while preserving their top elevation.
+      Useful when beams are modeled at arbitrary levels but need to reference Level 0
+      with a Z-offset for structural analysis.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Select one or more structural framing elements (beams).</li>
+      <li>Click <strong>Beams To Ground</strong>.</li>
+      <li>Handler finds Level 0 (elevation == 0) in the document.</li>
+      <li>For each beam:
+        <ul>
+          <li>Reads the beam's top elevation (<code>STRUCTURAL_ELEVATION_AT_TOP</code>).</li>
+          <li>Creates a <strong>new</strong> beam at Level 0 with the same curve and family type.</li>
+          <li>Sets Z-justification to Top, reference level to Level 0.</li>
+          <li>Sets Z-offset to the original top elevation (preserves visual position).</li>
+        </ul>
+      </li>
+      <li>Deletes all original beams in batch.</li>
+      <li>Shows count summary.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/SetBeamsToGroundZeroHandler.cs</span>
+    </div>
+
+    <div class="issue-card" style="margin-top:1rem;">
+      <div class="issue-title">Originals Deleted Before Verifying Replacements</div>
+      <div class="issue-body">
+        <p>The handler deletes original beams after creating replacements, but does not verify
+        that each new beam was actually created successfully. If <code>doc.Create.NewFamilyInstance()</code>
+        returns <code>null</code> (rare but possible), the original beam is deleted with no replacement.
+        Should track which originals have confirmed replacements before batch-deleting.</p>
+      </div>
+    </div>
+    <div class="improve-card">
+      <div class="improve-title">No Try-Catch in Main Loop</div>
+      <div class="improve-body">
+        <p>Relies on null checks but has no exception handling around individual beam processing.
+        One malformed beam geometry could abort the entire operation mid-way, leaving some beams
+        duplicated and others not yet processed.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 3.2 JOIN WALLS & FLOORS ────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Join Walls &amp; Floors</span>
+      <span class="cmd-ribbon">Ribbon: Structure &rarr; Join Walls &amp; Floors</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Joins geometry between all concrete walls and the selected floors, roofs, ceilings,
+      or structural foundations. Uses <code>ElementIntersectsElementFilter</code> to find
+      spatially overlapping walls, then joins each pair. Handles join-order sensitivity
+      by retrying in reverse order on failure.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Select one or more floors, roofs, ceilings, or foundations.</li>
+      <li>Click <strong>Join Walls &amp; Floors</strong>.</li>
+      <li>For each selected host element:
+        <ul>
+          <li>Finds all walls that intersect it geometrically.</li>
+          <li>Skips: already-joined pairs, thin walls (&lt;30mm), curtain walls, stacked walls.</li>
+          <li>Attempts <code>JoinGeometry(host, wall)</code>.</li>
+          <li>If <code>ArgumentException</code>, retries with switched order: <code>JoinGeometry(wall, host)</code>.</li>
+        </ul>
+      </li>
+      <li>Shows detailed results: walls joined (normal vs. switched), skipped, already joined, failed (with IDs).</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/JoinAllConcreteWallsAndFloorsGeometryHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box tip">
+        <span class="info-label">Design Strength</span>
+        <div class="info-text">
+          Excellent per-element error handling. Every operation is wrapped in try-catch.
+          Failures are logged and reported but never stop the overall process. The
+          switched-order retry handles Revit's unpredictable join-order sensitivity.
+        </div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">Warning Suppression</span>
+        <div class="info-text">
+          Uses <code>SuppressWarningsPreprocessor</code> to silently handle Revit's
+          geometry join warnings that would otherwise halt the transaction.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 3.3 SPLIT FLOOR ────────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Split Floor</span>
+      <span class="cmd-ribbon">Ribbon: Structure &rarr; Split Floor</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Splits compound (multi-layer) floors into individual single-layer floors &mdash;
+      the floor equivalent of Split Wall. Each layer becomes a separate floor at its
+      correct vertical offset. Preserves slope arrows, shape editing (vertex modifications),
+      and openings from the original floor.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Select one or more compound floors.</li>
+      <li>Click <strong>Split Floor</strong>.</li>
+      <li>Dialog shows layer breakdown with type-assignment combo per layer (auto-create or existing type).</li>
+      <li>Choose scope: selected floors only, or all floors of the same type.</li>
+      <li>Click Split &mdash; engine runs a 4-transaction pipeline per floor.</li>
+    </ol>
+
+    <div class="diagram-wrap">
+      <div class="diagram-title">Split Floor &mdash; 4-Transaction Pipeline (per floor)</div>
+      <div class="mermaid">
+graph LR
+  R["Record slope,\nopenings, shape\nediting"] --> A["Tx 1:\nCreate replacement\nfloors + apply slope\n+ shape editing"]
+  A --> B["Tx 2:\nRecreate openings\non each layer"]
+  B --> C["Tx 3:\nDelete original\ncompound floor"]
+  C --> D["Tx 4:\nJoin adjacent\nreplacement layers"]
+
+  style R fill:#f1f5f9,stroke:#94a3b8
+  style A fill:#1e3a5f,color:#fff
+  style B fill:#7c3aed,color:#fff
+  style C fill:#b91c1c,color:#fff
+  style D fill:#166534,color:#fff
+      </div>
+    </div>
+
+    <h4>Preserved Properties</h4>
+    <table class="data-table" style="margin:0.5rem 0 1rem 0;">
+      <thead>
+        <tr>
+          <th>Property</th>
+          <th>How It's Preserved</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Boundary curves</td>
+          <td>Extracted from sketch profile; fallback to top-face geometry edges</td>
+        </tr>
+        <tr>
+          <td>Slope arrow + angle</td>
+          <td>Recorded before split, reapplied to each replacement floor</td>
+        </tr>
+        <tr>
+          <td>Shape editing (vertices)</td>
+          <td>Vertex offsets recorded, matched to new floors by XY proximity (3mm tolerance)</td>
+        </tr>
+        <tr>
+          <td>Openings</td>
+          <td>Boundaries recorded pre-split, recreated on each layer with Z-flattening for sloped floors</td>
+        </tr>
+        <tr>
+          <td>Height offset</td>
+          <td>Original offset + layer's TopOffset applied to each replacement</td>
+        </tr>
+        <tr>
+          <td>Parameters</td>
+          <td>Comments, mark, structural flag copied to each replacement</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/SplitFloorHandler.cs</span>
+      <span class="key-file">Helpers/FloorSplitter/FloorSplitterEngine.cs</span>
+      <span class="key-file">Helpers/FloorSplitter/FloorLayerAnalyzer.cs</span>
+      <span class="key-file">Views/FloorSplitterDialog.xaml</span>
+    </div>
+
+    <div class="callout" style="margin-top:1rem;">
+      <div class="callout-title">Opening Recreation &mdash; Z-Flattening</div>
+      <div class="callout-body">
+        <p>Sloped floors have opening curves at varying Z elevations. The engine flattens all
+        opening curves to a consistent Z before recreation. Without this, openings on sloped
+        floors would be created at the wrong elevation or fail entirely. Handles Line and Arc
+        curves explicitly; other curve types pass through as-is.</p>
+      </div>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box warning">
+        <span class="info-label">Edge Case</span>
+        <div class="info-text">
+          Shape editing vertex matching uses XY proximity (3mm). Floors with very close
+          vertices or irregular subdivision could mismatch. In practice, this tolerance
+          works for standard construction geometry.
+        </div>
+      </div>
+      <div class="info-box gotcha">
+        <span class="info-label">Boundary Fallback</span>
+        <div class="info-text">
+          If sketch profile extraction fails, the engine falls back to extracting edges from the
+          topmost horizontal <code>PlanarFace</code> in the floor's geometry. Less precise but
+          ensures the split doesn't abort entirely.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── 3.4 JOIN BEAMS TO WALLS ────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Join Beams to Walls</span>
+      <span class="cmd-ribbon">Utility (no ribbon button)</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Joins geometry between selected structural elements (beams, columns, foundations) and
+      all intersecting walls. Same join-retry pattern as Join Walls &amp; Floors, but operates
+      on structural framing instead of floors/roofs.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Select beams, columns, or structural foundations.</li>
+      <li>Invoke the command (available as utility, not on the main ribbon).</li>
+      <li>For each structural element:
+        <ul>
+          <li>Finds intersecting walls via <code>ElementIntersectsElementFilter</code>.</li>
+          <li>Skips already-joined, thin, curtain, and stacked walls.</li>
+          <li>Joins with retry on <code>ArgumentException</code> (switched order).</li>
+        </ul>
+      </li>
+      <li>Results dialog shows per-category breakdown (beams/columns/foundations processed, walls joined, failures).</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/JoinSelectedBeamsToBlockWallsHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Shared Pattern</span>
+        <div class="info-text">
+          Nearly identical to Join Walls &amp; Floors. Both use the same intersection filter,
+          wall filtering (width/curtain/stacked), join-retry logic, and results reporting.
+          Could be refactored into a shared base class, but both work correctly as-is.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     CHAPTER SUMMARY
+     ══════════════════════════════════════════════════════════ -->
+<section class="section" style="margin-top:2rem;">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Structure &mdash; Summary</div>
+    </div>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Command</th>
+        <th>Input</th>
+        <th>UI</th>
+        <th>Transactions</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Beams To Ground</td>
+        <td>Selection (beams)</td>
+        <td>Summary dialog</td>
+        <td>1</td>
+        <td><span class="status status-sketchy">Sketchy</span></td>
+      </tr>
+      <tr>
+        <td>Join Walls &amp; Floors</td>
+        <td>Selection (floors/roofs/ceilings/foundations)</td>
+        <td>Results dialog</td>
+        <td>1</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Split Floor</td>
+        <td>Selection (compound floors)</td>
+        <td>Layer dialog</td>
+        <td>4 per floor</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Join Beams to Walls</td>
+        <td>Selection (beams/columns/foundations)</td>
+        <td>Results dialog</td>
+        <td>1</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:1.5rem;">
+    <div style="font-weight:700; font-size:0.9rem; color:#1e3a5f; margin-bottom:0.75rem;">Cross-Cutting Observations</div>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>Join commands</strong> (Walls&amp;Floors + Beams) share 90% of their code.
+      Both are well-engineered with per-element error isolation and the join-order retry pattern.
+      A shared helper would eliminate duplication.</li>
+      <li><strong>Split Floor</strong> is impressively complete &mdash; slope arrows, shape editing
+      vertex transfer, and opening recreation with Z-flattening. More complex than Split Wall
+      because floors carry more geometric metadata.</li>
+      <li><strong>Beams To Ground</strong> is the weakest command &mdash; no rollback safety,
+      deletes originals before confirming replacements. Could lose data on partial failure.</li>
+    </ul>
+  </div>
+</section>
+
+
+<div class="page-break"></div>
+<a id="ch-schedules"></a>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     SECTION 4 — SCHEDULES
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-header">
+    <span class="section-num">4</span>
+    <div>
+      <div class="section-title">Schedules</div>
+      <div class="section-desc">3 commands &mdash; export, roundtrip editing, key schedule import</div>
+    </div>
+  </div>
+
+  <p style="font-size:0.88rem; color:#374151; margin-bottom:1rem;">
+    The Schedules panel bridges Revit schedules and Excel. Two services power these commands:
+    <code>ScheduleExcelExportService</code> for professional one-way export with full formatting,
+    and <code>ScheduleExcelRoundtripService</code> for bidirectional editing with element tracking.
+    All three commands share the <code>SchedulePickerWindow</code> for schedule selection.
+  </p>
+
+  <div class="callout">
+    <div class="callout-title">Schedule Filtering</div>
+    <div class="callout-body">
+      All three commands filter schedules before showing the picker. Excluded:
+      titleblock revision schedules, internal keynote schedules, key schedules,
+      and system schedules (names starting with <code>&lt;</code>).
+    </div>
+  </div>
+</section>
+
+<!-- ── 4.1 EXPORT SCHEDULE TO EXCEL ───────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Export Schedule</span>
+      <span class="cmd-ribbon">Ribbon: Schedules &rarr; Export Schedule</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Exports one or more schedules to professionally formatted Excel files.
+      Supports two modes: all selected schedules in a single workbook (one sheet per schedule),
+      or each schedule as a separate <code>.xlsx</code> file in a folder.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Export Schedule</strong>.</li>
+      <li><code>SchedulePickerWindow</code> opens in multi-select mode with search filter.</li>
+      <li>Select schedules (Ctrl+Click for multiple). Choose export mode: "One Excel file" or "Separate files."</li>
+      <li><strong>Single file:</strong> Save dialog &rarr; all schedules written as sheets in one workbook.</li>
+      <li><strong>Separate files:</strong> Folder picker &rarr; one <code>.xlsx</code> per schedule, filenames sanitized.</li>
+      <li>Shows success summary with file count.</li>
+    </ol>
+
+    <h4>Excel Output Quality</h4>
+    <table class="data-table" style="margin:0.5rem 0 1rem 0;">
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th>Detail</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Title row</td>
+          <td>Merged across all columns, height 30, bold navy</td>
+        </tr>
+        <tr>
+          <td>Header row</td>
+          <td>Bold white text on dark navy (#1F4E79) background, frozen</td>
+        </tr>
+        <tr>
+          <td>Data rows</td>
+          <td>Alternating white / light blue (#F2F7FB)</td>
+        </tr>
+        <tr>
+          <td>Column types</td>
+          <td>Auto-detected: Int (#,##0), Decimal (#,##0.00), Percentage (0%), Text</td>
+        </tr>
+        <tr>
+          <td>Summary rows</td>
+          <td>Subtotals (medium navy border) and grand totals (bold navy text) detected automatically</td>
+        </tr>
+        <tr>
+          <td>Print setup</td>
+          <td>Landscape, 1" margins, fit to 1 page wide, frozen header repeats on print</td>
+        </tr>
+        <tr>
+          <td>RTL support</td>
+          <td>Reading order = 2 (Hebrew right-to-left)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/ExportScheduleToExcelHandler.cs</span>
+      <span class="key-file">Services/ScheduleExcelExportService.cs</span>
+      <span class="key-file">Views/SchedulePickerWindow.xaml</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box tip">
+        <span class="info-label">Resilience</span>
+        <div class="info-text">
+          In separate-files mode, per-schedule errors are caught and logged without
+          aborting the rest. Summary shows "X of Y exported successfully."
+        </div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">27 Cell Styles</span>
+        <div class="info-text">
+          The export service defines 27 OpenXml styles covering all combinations of
+          row type (normal/alt/subtotal/grand) &times; column type (int/dec/pct/text).
+          Decimal zeros render in gray text for subtlety.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 4.2 EDIT IN EXCEL ──────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Edit In Excel</span>
+      <span class="cmd-ribbon">Ribbon: Schedules &rarr; Edit In Excel</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Full roundtrip: exports a schedule to a temp Excel file, opens it for editing,
+      waits for the user to save and close, then imports changes back into Revit.
+      Writable cells have white backgrounds; read-only cells are grayed out.
+    </p>
+
+    <div class="diagram-wrap">
+      <div class="diagram-title">Edit In Excel &mdash; Roundtrip Flow</div>
+      <div class="mermaid">
+graph LR
+  A["Export schedule\nto temp .xlsx"] --> B["Open in Excel\n(Process.Start)"]
+  B --> C["User edits\nwhite cells"]
+  C --> D["User saves &\ncloses Excel"]
+  D --> E["Click 'Import\nChanges' in Revit"]
+  E --> F["Read Excel,\ncompare values"]
+  F --> G["Apply changes\nto elements"]
+  G --> H["Show results:\nupdated/skipped/failed"]
+
+  style A fill:#1e3a5f,color:#fff
+  style E fill:#7c3aed,color:#fff
+  style G fill:#166534,color:#fff
+      </div>
+    </div>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>If active view is a schedule, it's used directly. Otherwise, schedule picker opens (single-select).</li>
+      <li>Schedule exported to temp file: <code>%TEMP%\BimTasksV2_{name}_{timestamp}.xlsx</code></li>
+      <li>Excel opens automatically via shell association.</li>
+      <li>Revit shows a confirmation dialog: "Edit, save, close Excel, then click Import Changes."</li>
+      <li>On Import: reads Excel back, compares each cell to current Revit value.</li>
+      <li>Changed cells update the element's parameter (instance or type parameter).</li>
+      <li>Results summary: updated cells, unchanged (skipped), failed, affected elements.</li>
+      <li>Temp file deleted (best-effort).</li>
+    </ol>
+
+    <h4>How Element Tracking Works</h4>
+    <p style="font-size:0.88rem; color:#374151;">
+      The roundtrip service writes a <strong>hidden column A</strong> containing comma-separated
+      <code>ElementId</code> values for each row. On import, it reads column A to find the
+      exact elements to update. For itemized schedules, rows map 1:1 to elements. For grouped
+      schedules, an element signature (pipe-delimited field values) groups elements by their
+      shared properties.
+    </p>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/EditScheduleInExcelHandler.cs</span>
+      <span class="key-file">Services/ScheduleExcelRoundtripService.cs</span>
+      <span class="key-file">Views/SchedulePickerWindow.xaml</span>
+    </div>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">No Verification That Excel Was Saved</div>
+      <div class="improve-body">
+        <p>The handler trusts the user to save and close Excel before clicking "Import Changes."
+        If the user forgot to save, the import reads the last-saved state (or the original export).
+        There's no timeout, no file-modification check, and no warning if the file hasn't changed.</p>
+      </div>
+    </div>
+    <div class="improve-card">
+      <div class="improve-title">Process.Start Without Error Handling</div>
+      <div class="improve-body">
+        <p><code>Process.Start()</code> with <code>UseShellExecute = true</code> will throw if
+        Excel (or any <code>.xlsx</code> handler) is not installed. This exception is not
+        specifically caught &mdash; it falls through to the generic error handler.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── 4.3 IMPORT KEY SCHEDULES ───────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Import Key Schedules</span>
+      <span class="cmd-ribbon">Ribbon: Schedules &rarr; Import Key Schedules</span>
+    </div>
+    <span class="status status-sketchy">Sketchy</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Imports key schedule data from an Excel file into 4 Revit key schedules
+      (Walls, Floors, Structural Columns, Structural Framing). Creates the key schedules
+      if they don't exist. Each row in Excel becomes a key entry with 5 fields:
+      KeyName, ItemNumber, Description, Price, Subcontractor.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Import Key Schedules</strong>.</li>
+      <li>Open file dialog &rarr; select <code>.xlsx</code> file.</li>
+      <li>Reads first worksheet, starting at row 2 (row 1 = header). 5 columns: KeyName, ItemNumber, Description, Price, Subcontractor.</li>
+      <li>For each of 4 target categories:
+        <ul>
+          <li>Finds or creates <code>BIMTasks_Key_{Category}</code> schedule.</li>
+          <li>Ensures all parameter fields exist on the schedule.</li>
+          <li>For each Excel row: finds existing key element by name or inserts new row.</li>
+          <li>Sets all 5 parameters on the element.</li>
+        </ul>
+      </li>
+      <li>Shows success dialog.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/ImportKeySchedulesFromExcelHandler.cs</span>
+    </div>
+
+    <div class="issue-card" style="margin-top:1rem;">
+      <div class="issue-title">No Excel Format Validation</div>
+      <div class="issue-body">
+        <p>Assumes the Excel file has exactly 5 columns in a specific order. No header
+        validation, no column count check. If the user opens a differently structured file,
+        data will be silently misassigned (e.g., Description written to Price column).</p>
+      </div>
+    </div>
+    <div class="issue-card">
+      <div class="issue-title">Silent Price Parse Failure</div>
+      <div class="issue-body">
+        <p>Price column is parsed with <code>double.TryParse()</code> &mdash; non-numeric values
+        silently default to 0. No warning shown to the user that pricing data was lost.</p>
+      </div>
+    </div>
+    <div class="improve-card">
+      <div class="improve-title">No Duplicate Key Detection</div>
+      <div class="improve-body">
+        <p>If two Excel rows have the same KeyName, both will be processed. The second row
+        overwrites the first without warning. Should either merge, skip, or warn.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     SHARED UI — SCHEDULE PICKER
+     ══════════════════════════════════════════════════════════ -->
+<section class="section" style="margin-top:2rem;">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Shared UI &mdash; Schedule Picker</div>
+    </div>
+  </div>
+
+  <p style="font-size:0.88rem; color:#374151; margin-bottom:1rem;">
+    All three commands use <code>SchedulePickerWindow</code>, a reusable WPF dialog
+    with two modes:
+  </p>
+
+  <div class="info-row">
+    <div class="info-box note">
+      <span class="info-label">Single-Select Mode</span>
+      <div class="info-text">
+        Used by Edit In Excel and Import Key Schedules. One schedule at a time.
+        Double-click to confirm. No export mode radio buttons.
+      </div>
+    </div>
+    <div class="info-box note">
+      <span class="info-label">Multi-Select Mode</span>
+      <div class="info-text">
+        Used by Export Schedule. Ctrl+Click for multiple. Shows radio buttons:
+        "One Excel file" (multiple sheets) vs. "Separate Excel files" (one per schedule).
+      </div>
+    </div>
+  </div>
+
+  <p style="font-size:0.88rem; color:#374151; margin-top:1rem;">
+    Both modes include a real-time search box that filters the schedule list by name (case-insensitive).
+    Schedules are sorted alphabetically.
+  </p>
+
+  <div class="key-files" style="margin-top:0.5rem;">
+    <span class="key-file">Views/SchedulePickerWindow.xaml</span>
+    <span class="key-file">Views/SchedulePickerWindow.xaml.cs</span>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     CHAPTER SUMMARY
+     ══════════════════════════════════════════════════════════ -->
+<section class="section" style="margin-top:2rem;">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Schedules &mdash; Summary</div>
+    </div>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Command</th>
+        <th>Direction</th>
+        <th>UI</th>
+        <th>Transactions</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Export Schedule</td>
+        <td>Revit &rarr; Excel (one-way)</td>
+        <td>Multi-select picker + Save/Folder dialog</td>
+        <td>None</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Edit In Excel</td>
+        <td>Revit &harr; Excel (roundtrip)</td>
+        <td>Single-select picker + Excel + confirm dialog</td>
+        <td>1 (import)</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Import Key Schedules</td>
+        <td>Excel &rarr; Revit (one-way)</td>
+        <td>Open file dialog</td>
+        <td>1 (batch)</td>
+        <td><span class="status status-sketchy">Sketchy</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:1.5rem;">
+    <div style="font-weight:700; font-size:0.9rem; color:#1e3a5f; margin-bottom:0.75rem;">Cross-Cutting Observations</div>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>Export quality is professional-grade</strong> &mdash; 27 cell styles, auto-detected
+      column types, summary row classification, RTL support, and print-ready layout. This is
+      well above typical Revit add-in export quality.</li>
+      <li><strong>Roundtrip editing is clever</strong> &mdash; hidden ElementId column + writable/read-only
+      field analysis + element signature matching. The complexity is justified by the use case.</li>
+      <li><strong>Key schedule import is the weakest link</strong> &mdash; no format validation,
+      silent data loss on parse failures, and no duplicate detection. Needs hardening before
+      relying on it for production data.</li>
+      <li><strong>Two separate export services</strong> exist:
+      <code>ScheduleExcelExportService</code> (presentation-grade, one-way) and
+      <code>ScheduleExcelRoundtripService</code> (element-tracked, bidirectional).
+      They share no code but serve distinct purposes.</li>
+    </ul>
+  </div>
+</section>
+
+
+<div class="page-break"></div>
+<a id="ch-boq"></a>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     SECTION 5 — BOQ
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-header">
+    <span class="section-num">5</span>
+    <div>
+      <div class="section-title">BOQ</div>
+      <div class="section-desc">5 commands &mdash; parameter setup, schedule creation, quantity auto-fill, pricing, contract import</div>
+    </div>
+  </div>
+
+  <p style="font-size:0.88rem; color:#374151; margin-bottom:1rem;">
+    The BOQ panel implements a full Bill of Quantities workflow for Israeli construction projects.
+    The pipeline runs in order: set up shared parameters, create reporting schedules,
+    auto-fill quantities from geometry, calculate effective prices for composite items,
+    and import contract sections from Excel. All 5 commands share a common set of
+    19 shared parameters in the <code>"BIMIsrael_BOQ"</code> group.
+  </p>
+
+  <div class="diagram-wrap">
+    <div class="diagram-title">BOQ Pipeline &mdash; Recommended Execution Order</div>
+    <div class="mermaid">
+graph LR
+  A["1. BOQ Setup\n(create params)"] --> B["2. BOQ Schedules\n(create 10 schedules)"]
+  B --> C["3. BOQ AutoFill\n(populate qty)"]
+  C --> D["4. BOQ Calc Price\n(COMP items)"]
+  D --> E["5. Contract Sections\n(Excel import)"]
+
+  style A fill:#8B5CF6,color:#fff
+  style B fill:#7c3aed,color:#fff
+  style C fill:#6d28d9,color:#fff
+  style D fill:#5b21b6,color:#fff
+  style E fill:#4c1d95,color:#fff
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="callout-title">18 Payable Categories</div>
+    <div class="callout-body">
+      BOQ parameters are bound to: Floors, Walls, Roofs, Ceilings, Structural Foundations,
+      Structural Columns, Structural Framing, Structural Framing Systems, Curtain Wall Panels,
+      Curtain Wall Mullions, Doors, Windows, Stairs, Stair Railings, Railings, Ramps, Columns,
+      and Generic Models.
+    </div>
+  </div>
+</section>
+
+<!-- ── 5.1 BOQ SETUP ──────────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">BOQ Setup</span>
+      <span class="cmd-ribbon">Ribbon: BOQ &rarr; BOQ Setup</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Creates 19 shared parameters and binds them as instance parameters to all 18 payable categories.
+      This is the foundation step &mdash; all other BOQ commands depend on these parameters existing.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>BOQ Setup</strong>.</li>
+      <li>Handler checks <code>app.SharedParametersFilename</code> for an existing shared param file.</li>
+      <li>If not found, a <strong>SaveFileDialog</strong> lets the user create/select one.</li>
+      <li>Opens the shared parameter file and gets or creates the <code>"BIMIsrael_BOQ"</code> group.</li>
+      <li>Creates 19 parameters (14 core + 5 generic-model-only) with <code>ReInsert</code>.</li>
+      <li>Binds each parameter as an instance binding to the appropriate categories.</li>
+      <li>Reports success/error count for each parameter.</li>
+    </ol>
+
+    <h4>Parameters Created</h4>
+    <table class="data-table" style="margin:0.5rem 0 1rem 0;">
+      <thead>
+        <tr>
+          <th>Parameter</th>
+          <th>Type</th>
+          <th>Purpose</th>
+          <th>Scope</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>BI_BOQ_Code</td><td>String</td><td>BOQ / contract line item code</td><td>All 18</td></tr>
+        <tr><td>BI_Zone</td><td>String</td><td>Zone / WBS location</td><td>All 18</td></tr>
+        <tr><td>BI_WorkStage</td><td>String</td><td>FOUNDATIONS / FRAME / BUILDING / FINISHES</td><td>All 18</td></tr>
+        <tr><td>BI_CurrentStage</td><td>String</td><td>Sub-stage (DRILLING / CAGE / POUR)</td><td>All 18</td></tr>
+        <tr><td>BI_IsPayItem</td><td>Boolean</td><td>Include in BOQ</td><td>All 18</td></tr>
+        <tr><td>BI_QtyBasis</td><td>String</td><td>AREA / VOLUME / LENGTH / COUNT / COMP</td><td>All 18</td></tr>
+        <tr><td>BI_QtyValue</td><td>Number</td><td>Calculated quantity (metric)</td><td>All 18</td></tr>
+        <tr><td>BI_QtyOverride</td><td>Number</td><td>Manual quantity override</td><td>All 18</td></tr>
+        <tr><td>BI_QtyMultiplier</td><td>Number</td><td>Multiplier (default 1.0)</td><td>All 18</td></tr>
+        <tr><td>BI_UnitPrice</td><td>Number</td><td>Unit price in ILS</td><td>All 18</td></tr>
+        <tr><td>BI_ExecPct_ToDate</td><td>Number</td><td>0&ndash;100% execution progress</td><td>All 18</td></tr>
+        <tr><td>BI_PaidPct_ToDate</td><td>Number</td><td>0&ndash;100% payment progress</td><td>All 18</td></tr>
+        <tr><td>BI_Note</td><td>String</td><td>Short note</td><td>All 18</td></tr>
+        <tr><td>BI_HostElementId</td><td>String</td><td>UniqueId of host element</td><td>All 18</td></tr>
+        <tr><td>BI_SourceElementId</td><td>String</td><td>Link to source element (PayLines)</td><td>GenericModel</td></tr>
+        <tr><td>BI_ComponentRole</td><td>String</td><td>DRILLING / CAGE / CONCRETE / etc.</td><td>GenericModel</td></tr>
+        <tr><td>BI_AnalysisBasis</td><td>String</td><td>Analysis driver basis</td><td>GenericModel</td></tr>
+        <tr><td>BI_EffUnitPrice</td><td>Number</td><td>Effective unit price (ILS/unit)</td><td>GenericModel</td></tr>
+        <tr><td>BI_ContractValue</td><td>Number</td><td>UnitPrice &times; QtyValue</td><td>GenericModel</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/BOQSetupHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Transaction</span>
+        <div class="info-text">Single transaction: <code>"Setup BOQ Parameters"</code></div>
+      </div>
+      <div class="info-box tip">
+        <span class="info-label">Idempotent</span>
+        <div class="info-text">
+          Uses <code>ReInsert</code> &mdash; safe to run multiple times.
+          Existing parameters are overwritten, not duplicated.
+        </div>
+      </div>
+    </div>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">No Backup of Shared Parameter File</div>
+      <div class="improve-body">
+        <p>Directly modifies the shared parameter file without creating a backup first.
+        If the file is shared across multiple projects, accidental overwrites
+        could affect other teams.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 5.2 BOQ CREATE SCHEDULES ───────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">BOQ Schedules</span>
+      <span class="cmd-ribbon">Ribbon: BOQ &rarr; BOQ Schedules</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Creates 10 Revit schedules covering BOQ reporting, payment status, quality assurance,
+      and per-stage breakdowns. If a schedule name already exists, appends <code>_v2</code>,
+      <code>_v3</code>, etc. (up to 99).
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>BOQ Schedules</strong>.</li>
+      <li>Handler creates all 10 schedules in a single transaction.</li>
+      <li>Each schedule gets fields, sort groups, filters, and grand totals configured automatically.</li>
+      <li>Reports success/error count.</li>
+    </ol>
+
+    <h4>Schedules Created</h4>
+    <table class="data-table" style="margin:0.5rem 0 1rem 0;">
+      <thead>
+        <tr>
+          <th>Schedule</th>
+          <th>Purpose</th>
+          <th>Filter</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>BI_MASTER_BOQ</code></td>
+          <td>Master list &mdash; WorkStage, Zone, Code, Category, Qty, Price</td>
+          <td>IsPayItem = Yes</td>
+        </tr>
+        <tr>
+          <td><code>BI_PAYMENT_STATUS</code></td>
+          <td>Progress tracking &mdash; Exec%, Paid%, Qty, Price</td>
+          <td>IsPayItem = Yes</td>
+        </tr>
+        <tr>
+          <td><code>BI_PAYMENT_COMPONENTS</code></td>
+          <td>GenericModel PayLine breakdown by SourceElementId</td>
+          <td>IsPayItem = Yes, SourceElementId has value</td>
+        </tr>
+        <tr>
+          <td><code>BI_ANALYSIS_UNIT_COST</code></td>
+          <td>COMP item analysis &mdash; ContractValue, AnalysisBasis, EffUnitPrice</td>
+          <td>QtyBasis = "COMP", IsPayItem = Yes</td>
+        </tr>
+        <tr>
+          <td><code>BI_QA_MISSING_BOQ</code></td>
+          <td>QA: pay items with no BOQ code assigned</td>
+          <td>IsPayItem = Yes, BOQ_Code has NO value</td>
+        </tr>
+        <tr>
+          <td><code>BI_QA_MISSING_QTY</code></td>
+          <td>QA: pay items with no quantity basis</td>
+          <td>IsPayItem = Yes, QtyBasis has NO value</td>
+        </tr>
+        <tr>
+          <td><code>BI_STAGE_FOUNDATIONS</code></td>
+          <td rowspan="4">Per-stage breakdown &mdash; Zone, Code, Qty, Price, Exec%</td>
+          <td>WorkStage = "FOUNDATIONS"</td>
+        </tr>
+        <tr>
+          <td><code>BI_STAGE_FRAME</code></td>
+          <td>WorkStage = "FRAME"</td>
+        </tr>
+        <tr>
+          <td><code>BI_STAGE_BUILDING</code></td>
+          <td>WorkStage = "BUILDING"</td>
+        </tr>
+        <tr>
+          <td><code>BI_STAGE_FINISHES</code></td>
+          <td>WorkStage = "FINISHES"</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/BOQCreateSchedulesHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Transaction</span>
+        <div class="info-text">Single transaction: <code>"Create BOQ Schedules"</code></div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">Name Collision</span>
+        <div class="info-text">
+          Uses <code>GetUniqueName()</code> to append <code>_v2</code>&hellip;<code>_v99</code>
+          if a schedule name is taken. Fails at 100+ versions.
+        </div>
+      </div>
+    </div>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Silent Failures in Sort/Filter Setup</div>
+      <div class="improve-body">
+        <p>Helper methods <code>FindField()</code>, <code>AddSortGroup()</code>, and
+        <code>AddFilterHasValue()</code> use empty try/catch blocks.
+        If a BOQ parameter is missing from the schedule, the sort or filter
+        silently fails and the schedule appears correct but has no
+        grouping or filtering applied.</p>
+      </div>
+    </div>
+    <div class="improve-card">
+      <div class="improve-title">Hardcoded Stage Names</div>
+      <div class="improve-body">
+        <p>The 4 stage-specific schedules use hardcoded strings:
+        <code>"FOUNDATIONS"</code>, <code>"FRAME"</code>, <code>"BUILDING"</code>,
+        <code>"FINISHES"</code>. Projects with different stage naming conventions
+        would need code changes.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── 5.3 BOQ AUTOFILL QTY ───────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">BOQ AutoFill Qty</span>
+      <span class="cmd-ribbon">Ribbon: BOQ &rarr; BOQ AutoFill</span>
+    </div>
+    <span class="status status-sketchy">Sketchy</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Auto-populates <code>BI_QtyValue</code> and <code>BI_QtyBasis</code> for all elements
+      where <code>BI_IsPayItem = Yes</code>. Reads geometry from Revit, converts from
+      imperial to metric, applies multipliers and overrides, and copies legacy Hebrew
+      parameters to BI_ equivalents.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>BOQ AutoFill</strong>.</li>
+      <li>Collects all elements in 18 payable categories where <code>BI_IsPayItem = 1</code>.</li>
+      <li>For each element:
+        <ul>
+          <li>Determines <code>BI_QtyBasis</code> from category mapping (if not already set).</li>
+          <li>Special case: type name containing <code>"CONC"</code> &rarr; VOLUME instead of AREA.</li>
+          <li>Reads quantity from built-in parameters; falls back to geometry extraction.</li>
+          <li>Converts to metric (m, m&sup2;, m&sup3;) and rounds to 4 decimal places.</li>
+          <li>Applies <code>BI_QtyMultiplier</code> and <code>BI_QtyOverride</code>.</li>
+          <li>Copies legacy Hebrew params to BI_ equivalents.</li>
+          <li>Writes <code>BI_HostElementId</code> (for hosted elements like doors/windows/mullions).</li>
+        </ul>
+      </li>
+      <li>COMP items are silently skipped.</li>
+      <li>Reports updated / skipped / errors.</li>
+    </ol>
+
+    <h4>Category &rarr; Default Basis Mapping</h4>
+    <table class="data-table" style="margin:0.5rem 0 1rem 0;">
+      <thead>
+        <tr>
+          <th>Basis</th>
+          <th>Categories</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>AREA</td>
+          <td>Floors, Walls, Roofs, Ceilings, Ramps, Curtain Wall Panels</td>
+        </tr>
+        <tr>
+          <td>VOLUME</td>
+          <td>Structural Foundations, Structural Columns, Structural Framing, Structural Framing Systems, Columns</td>
+        </tr>
+        <tr>
+          <td>LENGTH</td>
+          <td>Stair Railings, Railings, Curtain Wall Mullions</td>
+        </tr>
+        <tr>
+          <td>COUNT</td>
+          <td>Doors, Windows, Stairs, Generic Models</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>Quantity Extraction Fallback Chain</h4>
+    <table class="data-table" style="margin:0.5rem 0 1rem 0;">
+      <thead>
+        <tr>
+          <th>Basis</th>
+          <th>Primary Source</th>
+          <th>Fallback</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>AREA</td>
+          <td><code>HOST_AREA_COMPUTED</code></td>
+          <td>Sum geometry face areas &divide; 6</td>
+        </tr>
+        <tr>
+          <td>VOLUME</td>
+          <td><code>HOST_VOLUME_COMPUTED</code></td>
+          <td>Sum geometry solid volumes (incl. GeometryInstance)</td>
+        </tr>
+        <tr>
+          <td>LENGTH</td>
+          <td><code>CURVE_ELEM_LENGTH</code> &rarr; <code>STRUCTURAL_FRAME_CUT_LENGTH</code> &rarr; <code>INSTANCE_LENGTH_PARAM</code></td>
+          <td><code>LocationCurve.Curve.Length</code></td>
+        </tr>
+        <tr>
+          <td>COUNT</td>
+          <td colspan="2">Always 1.0</td>
+        </tr>
+        <tr>
+          <td>COMP</td>
+          <td colspan="2">Skipped entirely (returns false)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/BOQAutoFillQtyHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Transaction</span>
+        <div class="info-text">Single transaction: <code>"BOQ Auto-Fill Quantities"</code></div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">Unit Conversion</span>
+        <div class="info-text">
+          Feet &rarr; meters (0.3048), sq.ft &rarr; m&sup2; (0.0929), cu.ft &rarr; m&sup3; (0.0283).
+          Revit stores everything in imperial internally.
+        </div>
+      </div>
+    </div>
+
+    <div class="issue-card" style="margin-top:1rem;">
+      <div class="issue-title">Suspicious Area Geometry Fallback: Divide by 6</div>
+      <div class="issue-body">
+        <p>When <code>HOST_AREA_COMPUTED</code> is unavailable, the fallback sums all geometry
+        face areas then <strong>divides by 6</strong>:
+        <code>return ConvertToSquareMeters(totalArea / 6)</code>.
+        This assumes a box with 6 equal faces (average = one face area), which is
+        incorrect for non-cubic geometry like walls, sloped roofs, or L-shaped elements.
+        The result will be wrong for most real-world cases.</p>
+      </div>
+    </div>
+    <div class="issue-card">
+      <div class="issue-title">Fragile Concrete Detection</div>
+      <div class="issue-body">
+        <p>Determines VOLUME basis by checking if the type name contains <code>"CONC"</code>
+        (case-sensitive substring). This is locale-dependent and could match unintended
+        type names (e.g., "CONCRETE_BLOCK" treated same as "CONCRETE_POUR").
+        Non-English projects would miss concrete elements entirely.</p>
+      </div>
+    </div>
+    <div class="improve-card">
+      <div class="improve-title">COMP Items Silently Skipped</div>
+      <div class="improve-body">
+        <p>Elements with <code>BI_QtyBasis = "COMP"</code> return false without logging.
+        The user sees these in the "skipped" count with no explanation of why they were
+        skipped. A brief note in the results dialog would help.</p>
+      </div>
+    </div>
+    <div class="improve-card">
+      <div class="improve-title">Legacy Hebrew Parameter Copy</div>
+      <div class="improve-body">
+        <p>Copies values from Hebrew-named parameters
+        (<span dir="rtl">&#1505;&#1506;&#1497;&#1507; &#1514;&#1511;&#1510;&#1497;&#1489;&#1497;</span>,
+        <span dir="rtl">&#1514;&#1488;&#1493;&#1512; &#1505;&#1506;&#1497;&#1507;</span>,
+        <span dir="rtl">&#1511;&#1489;&#1500;&#1503; &#1502;&#1513;&#1504;&#1492;</span>)
+        to BI_ equivalents. This is a migration bridge from the old parameter naming
+        convention. Should be removed once all projects are migrated.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 5.4 BOQ CALC EFFECTIVE UNIT PRICE ──────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">BOQ Calc Price</span>
+      <span class="cmd-ribbon">Ribbon: BOQ &rarr; BOQ Calc Price</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Calculates effective unit price for COMP (composite/lump-sum) PayLine items
+      by dividing contract value by the total physical quantity of matching elements.
+      This answers: "if we spread this contract line item across all physical elements,
+      what's the cost per unit?"
+    </p>
+
+    <div class="diagram-wrap">
+      <div class="diagram-title">Effective Unit Price Calculation</div>
+      <div class="mermaid">
+graph TD
+  A["Collect physical pay items\n(non-COMP, QtyValue > 0)"] --> B["Group by BOQ code + basis\nSum quantities"]
+  B --> C["Find all COMP PayLines\n(GenericModel, QtyBasis=COMP)"]
+  C --> D["For each PayLine:\nContractValue = UnitPrice × QtyValue"]
+  D --> E{"Physical items exist\nfor same code + basis?"}
+  E -->|Yes| F["EffUnitPrice =\nContractValue ÷ SumPhysicalQty"]
+  E -->|No| G["EffUnitPrice = 0"]
+  F --> H["Write BI_ContractValue\n+ BI_EffUnitPrice"]
+  G --> H
+
+  style A fill:#1e3a5f,color:#fff
+  style D fill:#7c3aed,color:#fff
+  style F fill:#166534,color:#fff
+  style G fill:#9a3412,color:#fff
+      </div>
+    </div>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>BOQ Calc Price</strong>.</li>
+      <li>Collects all physical (non-COMP) pay items, sums <code>BI_QtyValue</code> grouped by BOQ code + basis.</li>
+      <li>Finds all COMP PayLines (GenericModel elements with <code>BI_QtyBasis = "COMP"</code>).</li>
+      <li>For each PayLine:
+        <ul>
+          <li>Reads <code>BI_BOQ_Code</code>, <code>BI_AnalysisBasis</code>, <code>BI_UnitPrice</code>, <code>BI_QtyValue</code>.</li>
+          <li>Calculates <code>ContractValue = UnitPrice &times; QtyValue</code>.</li>
+          <li>Looks up total physical qty for same BOQ code + analysis basis.</li>
+          <li>Calculates <code>EffUnitPrice = ContractValue &divide; SumPhysicalQty</code>.</li>
+        </ul>
+      </li>
+      <li>Writes <code>BI_ContractValue</code> and <code>BI_EffUnitPrice</code> to each PayLine.</li>
+      <li>Reports per-PayLine results with breakdown.</li>
+    </ol>
+
+    <h4>Example</h4>
+    <div class="callout">
+      <div class="callout-body" style="font-size:0.85rem;">
+        <strong>PayLine:</strong> BOQ code "03-02-001", COMP, AnalysisBasis=AREA, UnitPrice=5,000, QtyValue=2<br/>
+        &rarr; ContractValue = 5,000 &times; 2 = <strong>10,000 ILS</strong><br/><br/>
+        <strong>Physical items</strong> with same BOQ code: Item A (50 m&sup2;) + Item B (30 m&sup2;) = <strong>80 m&sup2;</strong><br/><br/>
+        &rarr; EffUnitPrice = 10,000 &divide; 80 = <strong>125 ILS/m&sup2;</strong>
+      </div>
+    </div>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/BOQCalcEffUnitPriceHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Transaction</span>
+        <div class="info-text">Single transaction: <code>"Calculate Effective Unit Prices"</code></div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">Validation</span>
+        <div class="info-text">
+          Rejects PayLines missing BOQ code, invalid analysis basis, or zero unit price.
+          Each error is collected and reported individually.
+        </div>
+      </div>
+    </div>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Silent Zero Results</div>
+      <div class="improve-body">
+        <p>When no physical items match a PayLine's BOQ code + analysis basis,
+        <code>BI_EffUnitPrice</code> is set to 0 and marked as success. The user
+        won't know if the calculation was skipped due to missing data or if the
+        effective price is genuinely zero. Should log or flag these cases.</p>
+      </div>
+    </div>
+    <div class="improve-card">
+      <div class="improve-title">No Type Parameter Fallback</div>
+      <div class="improve-body">
+        <p>Unlike AutoFill, this handler only checks instance-level parameters when
+        collecting physical items. Elements with BOQ codes set on the type
+        (rather than instance) will be missed, potentially underestimating
+        the physical quantity denominator.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── 5.5 CONTRACT SECTIONS (SEIFEI CHOZE) ───────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Contract Sections (Seifei Choze)</span>
+      <span class="cmd-ribbon">Ribbon: BOQ &rarr; Contract Sections</span>
+    </div>
+    <span class="status status-sketchy">Sketchy</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Imports contract line items from an Excel file into Revit key schedules.
+      Creates or updates key schedules for 9 categories, binding 4 Hebrew-named shared
+      parameters. Each Excel row becomes a key entry with name, item number, description,
+      price, and subcontractor.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Contract Sections</strong>.</li>
+      <li>Handler checks if required shared parameters are bound. If not, binds them in a first transaction.</li>
+      <li>Opens a file dialog to select an <code>.xlsx</code> / <code>.xls</code> file.</li>
+      <li>Reads the first worksheet (row 2+). Columns: KeyName, ItemNumber, Description, Price, Subcontractor.</li>
+      <li>Stops on 5 consecutive empty rows or 10,000 rows max.</li>
+      <li>For each of 9 target categories:
+        <ul>
+          <li>Gets or creates <code>BIMTasks_Key_{Category}</code> key schedule.</li>
+          <li>Ensures all 4 parameter fields exist in the schedule.</li>
+          <li>For each Excel row: finds existing key by name (case-insensitive) or inserts new row.</li>
+          <li>Sets all 5 fields on the key element.</li>
+        </ul>
+      </li>
+      <li>Reports results per category.</li>
+    </ol>
+
+    <h4>Required Hebrew Parameters</h4>
+    <table class="data-table" style="margin:0.5rem 0 1rem 0;">
+      <thead>
+        <tr>
+          <th>Hebrew Name</th>
+          <th>English Meaning</th>
+          <th>Maps To</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td dir="rtl">&#1505;&#1506;&#1497;&#1507; &#1514;&#1511;&#1510;&#1497;&#1489;&#1497;</td><td>Budget section code</td><td>ItemNumber</td></tr>
+        <tr><td dir="rtl">&#1514;&#1488;&#1493;&#1512; &#1505;&#1506;&#1497;&#1507;</td><td>Section description</td><td>Description</td></tr>
+        <tr><td dir="rtl">&#1511;&#1489;&#1500;&#1503; &#1502;&#1513;&#1504;&#1492;</td><td>Subcontractor</td><td>Subcontractor</td></tr>
+        <tr><td dir="rtl">&#1502;&#1495;&#1497;&#1512; &#1499;&#1493;&#1500;&#1500;</td><td>Total price</td><td>Price</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Target Categories (9)</h4>
+    <p style="font-size:0.88rem; color:#374151;">
+      Walls, Floors, Structural Columns, Structural Framing, Roofs, Doors, Windows,
+      Generic Models, Ceilings.
+    </p>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/CreateSeifeiChozeHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Transactions</span>
+        <div class="info-text">
+          Two transactions: <code>"Bind BIMTasks Parameters"</code> (if needed)
+          and <code>"Import Key Schedules"</code>.
+        </div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">Price Parsing</span>
+        <div class="info-text">
+          Handles double, int, long, float, decimal types.
+          Strips currency symbols (&#8362;, $, &euro;). Tries invariant and current culture.
+        </div>
+      </div>
+    </div>
+
+    <div class="issue-card" style="margin-top:1rem;">
+      <div class="issue-title">Weak Parameter Binding Validation</div>
+      <div class="issue-body">
+        <p>Only checks if the <strong>first</strong> and <strong>last</strong> required parameter
+        are bound to the first and last target category. If middle parameters are missing
+        on middle categories, it goes undetected. The binding phase is skipped and
+        key schedule updates will fail silently for those categories.</p>
+      </div>
+    </div>
+    <div class="issue-card">
+      <div class="issue-title">Fragile Key Row Insertion</div>
+      <div class="issue-body">
+        <p>After inserting a new row into a key schedule, the handler finds the new element
+        by searching for an unnamed/empty-name element in the collector. This assumes
+        only one unnamed element exists at any time. If multiple rows are inserted or
+        an existing element has no name, the wrong element may be updated.</p>
+      </div>
+    </div>
+    <div class="issue-card">
+      <div class="issue-title">Hebrew Parameter Names Hardcoded as Unicode</div>
+      <div class="issue-body">
+        <p>The 4 required parameter names are stored as Unicode escape sequences
+        (<code>\u05E1\u05E2\u05D9\u05E3...</code>). This is a brittle locale-specific
+        dependency. If the shared parameter file uses slightly different names
+        (e.g., with/without spaces), the lookup fails silently.</p>
+      </div>
+    </div>
+    <div class="improve-card">
+      <div class="improve-title">No Excel Format Validation</div>
+      <div class="improve-body">
+        <p>Assumes the Excel file has exactly 5 columns in a specific order with no
+        header validation. A differently structured file will silently misassign data.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     CHAPTER SUMMARY
+     ══════════════════════════════════════════════════════════ -->
+<section class="section" style="margin-top:2rem;">
+  <div class="section-header">
+    <div>
+      <div class="section-title">BOQ &mdash; Summary</div>
+    </div>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Command</th>
+        <th>What It Creates/Updates</th>
+        <th>Transactions</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>BOQ Setup</td>
+        <td>19 shared parameters &rarr; 18 categories</td>
+        <td>1</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>BOQ Schedules</td>
+        <td>10 reporting schedules (master, payment, QA, stages)</td>
+        <td>1</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>BOQ AutoFill Qty</td>
+        <td>BI_QtyValue + BI_QtyBasis from geometry</td>
+        <td>1</td>
+        <td><span class="status status-sketchy">Sketchy</span></td>
+      </tr>
+      <tr>
+        <td>BOQ Calc Price</td>
+        <td>BI_EffUnitPrice + BI_ContractValue for COMP items</td>
+        <td>1</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Contract Sections</td>
+        <td>Key schedules from Excel (9 categories, 4 Hebrew params)</td>
+        <td>2</td>
+        <td><span class="status status-sketchy">Sketchy</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:1.5rem;">
+    <div style="font-weight:700; font-size:0.9rem; color:#1e3a5f; margin-bottom:0.75rem;">Cross-Cutting Observations</div>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>The pipeline design is sound</strong> &mdash; Setup &rarr; Schedules &rarr; AutoFill &rarr;
+      CalcPrice &rarr; Import is a logical progression. Each command builds on the previous
+      one's output. Running them out of order will produce incomplete or empty results.</li>
+      <li><strong>Israeli construction domain is baked in</strong> &mdash; Hebrew parameter names,
+      ILS currency, 4 hardcoded work stages (FOUNDATIONS/FRAME/BUILDING/FINISHES), and
+      BIMIsrael-specific naming conventions. Adapting this for international projects
+      would require significant refactoring.</li>
+      <li><strong>AutoFill is the weakest link</strong> &mdash; the divide-by-6 geometry fallback
+      and fragile concrete detection are likely to produce wrong quantities in edge cases.
+      The built-in parameter path (HOST_AREA_COMPUTED, etc.) is reliable for standard
+      elements, but the geometry fallback needs rework.</li>
+      <li><strong>Contract Sections has the most issues</strong> &mdash; weak binding validation,
+      fragile row insertion, and hardcoded Hebrew names make it the most brittle command
+      in the panel. It works for the specific use case it was built for, but any deviation
+      from the expected format will cause silent failures.</li>
+      <li><strong>Error handling is consistent</strong> &mdash; all 5 commands use per-element
+      try/catch, collect errors, and report success/error counts. No command will abort
+      the entire batch on a single element failure.</li>
+    </ul>
+  </div>
+</section>
+
+
+<div class="page-break"></div>
+<a id="ch-tools"></a>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     SECTION 6 — TOOLS
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-header">
+    <span class="section-num">6</span>
+    <div>
+      <div class="section-title">Tools</div>
+      <div class="section-desc">13 commands &mdash; panels, filters, DWG floors, export, voice, utilities</div>
+    </div>
+  </div>
+
+  <p style="font-size:0.88rem; color:#374151; margin-bottom:1rem;">
+    The Tools panel is the largest and most diverse. It contains panel toggles, filter/classification
+    utilities, DWG-to-Revit workflows, a JSON data exporter for the BIM Israel web app,
+    voice control, and element creation tools. Several commands are pure event publishers
+    that switch the dockable panel's content view.
+  </p>
+
+  <div class="callout">
+    <div class="callout-title">Event-Based Panel Switching</div>
+    <div class="callout-body">
+      Commands like Filter Tree, Calc Area, and Floating Toolbar don't run transactions.
+      They publish Prism events (<code>SwitchDockablePanelEvent</code>, <code>ToggleFloatingToolbarEvent</code>)
+      that the dockable panel ViewModel handles by swapping its active content view.
+    </div>
+  </div>
+</section>
+
+<!-- ── 6.1 FILTER TREE ────────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Filter Tree</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Filter Tree</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Opens the dockable panel and switches to <code>FilterTreeView</code>. Builds a hierarchical
+      tree of element categories, families, types, and parameter values from the active view
+      or current selection. Used for quick element filtering and inspection.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Filter Tree</strong>.</li>
+      <li>Updates <code>IRevitContextService</code> with active document.</li>
+      <li>Publishes <code>SwitchDockablePanelEvent("FilterTree")</code> &rarr; dockable panel swaps content.</li>
+      <li>Publishes <code>ResetFilterTreeEvent</code> &rarr; <code>FilterTreeViewModel</code> rebuilds tree.</li>
+      <li>Dockable pane shown if hidden.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/ShowFilterTreeWindowHandler.cs</span>
+      <span class="key-file">ViewModels/FilterTreeViewModel.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">No Transaction</span>
+        <div class="info-text">Pure event publisher &mdash; no model modifications.</div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">Synchronous Event</span>
+        <div class="info-text">
+          <code>ResetFilterTreeEvent</code> uses <code>ThreadOption.PublisherThread</code> (synchronous).
+          Tree load must complete before control returns to Revit.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 6.2 CALC AREA & VOLUME ─────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Calc Area &amp; Volume</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Calc Area &amp; Volume</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Switches the dockable panel to <code>ElementCalculationView</code> and calculates
+      area, volume, and count for selected elements across 10+ categories.
+      Includes material breakdown (concrete, steel, etc.) and special stair handling.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Calc Area &amp; Volume</strong>.</li>
+      <li>Publishes <code>SwitchDockablePanelEvent("ElementCalculation")</code>.</li>
+      <li>Publishes <code>CalculateElementsEvent</code> &rarr; <code>ElementCalculationViewModel</code> recalculates.</li>
+      <li>Results displayed in dockable panel: counts + area (m&sup2;) + volume (m&sup3;) per category.</li>
+    </ol>
+
+    <h4>Supported Categories</h4>
+    <p style="font-size:0.88rem; color:#374151;">
+      Walls, Floors, Beams, Columns, Foundations, Stairs (with tread/landing breakdown),
+      Railings, Doors, Windows. Material breakdown for concrete/steel elements.
+    </p>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/CheckSelectedWallsAreaAndVolumeHandler.cs</span>
+      <span class="key-file">Services/ElementCalculationService.cs</span>
+      <span class="key-file">ViewModels/ElementCalculationViewModel.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">No Transaction</span>
+        <div class="info-text">Read-only geometry extraction. No model changes.</div>
+      </div>
+      <div class="info-box tip">
+        <span class="info-label">Clipboard</span>
+        <div class="info-text">
+          ViewModel exposes <code>CopyToClipboardCommand</code> for easy pasting into Excel/reports.
+        </div>
+      </div>
+    </div>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Recalculates on Every Invocation</div>
+      <div class="improve-body">
+        <p><code>ElementCalculationService</code> (~828 lines) reads geometry for all selected elements
+        on every call. No caching &mdash; selecting 1,000+ elements will block the UI
+        while calculations run.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 6.3 UNIFORMAT CODES ────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Uniformat Codes</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Uniformat Codes</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Opens a modeless window with a hierarchical Uniformat classification tree loaded from CSV.
+      User can browse codes, search by name or number, and assign Uniformat codes
+      to selected Revit elements.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Uniformat Codes</strong>.</li>
+      <li>Window opens modeless (non-blocking).</li>
+      <li>User browses/searches the Uniformat tree and assigns codes to elements.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/ShowUniformatWindowHandler.cs</span>
+      <span class="key-file">Services/UniformatDataService.cs</span>
+      <span class="key-file">Views/UniformatWindowView.xaml</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">CSV Format</span>
+        <div class="info-text">
+          Expects columns: <code>RevitAssemblyCode</code>, <code>UniformatName</code>,
+          <code>Level</code>, <code>Root</code>, <code>Depth</code>, <code>BuiltInCatHint</code>.
+        </div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">Modeless</span>
+        <div class="info-text">Window stays open alongside Revit &mdash; doesn't block other commands.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 6.4 COPY FROM LINK ─────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Copy From Link</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Copy From Link</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Copies elements from a linked model into the active document. Shows a cascading
+      selector dialog (Link &rarr; Category &rarr; Family &rarr; Type) and copies all matching
+      elements with their link transform applied.
+    </p>
+
+    <div class="diagram-wrap">
+      <div class="diagram-title">Copy From Link &mdash; Batch Strategy</div>
+      <div class="mermaid">
+graph TD
+  A["User selects:\nLink → Category → Family → Type"] --> B["Batch copy\n(all at once)"]
+  B --> C{"Success?"}
+  C -->|Yes| D["Select copied\nelements"]
+  C -->|No| E["Fallback:\nchunked copy\n(20 per batch)"]
+  E --> F{"5 consecutive\nfailures?"}
+  F -->|No| G["Continue with\nnext chunk"]
+  F -->|Yes| H["Abort remaining\nchunks"]
+  G --> D
+  H --> D
+
+  style A fill:#1e3a5f,color:#fff
+  style B fill:#7c3aed,color:#fff
+  style D fill:#166534,color:#fff
+  style H fill:#9a3412,color:#fff
+      </div>
+    </div>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Copy From Link</strong>.</li>
+      <li><code>CopyCategoryFromLinkView</code> dialog opens with cascading dropdowns.</li>
+      <li>Select link, category (or &lt;All&gt;), family (or &lt;All&gt;), type (or &lt;All&gt;).</li>
+      <li>Handler attempts batch copy via <code>ElementTransformUtils.CopyElements()</code>.</li>
+      <li>If batch fails, falls back to chunked copy (20 elements/batch, max 5 consecutive failures).</li>
+      <li>Copied elements selected in active view. Results dialog shows count.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/CopyCategoryFromLinkHandler.cs</span>
+      <span class="key-file">Views/CopyCategoryFromLinkView.xaml</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Type Conflicts</span>
+        <div class="info-text">
+          <code>UseDestinationTypesHandler</code> resolves duplicate type names by
+          reusing the destination document's types. Source types with different
+          properties but matching names will use destination definitions.
+        </div>
+      </div>
+      <div class="info-box tip">
+        <span class="info-label">Transform</span>
+        <div class="info-text">
+          All copied elements are transformed by the link's total placement transform,
+          so they land in the correct world-space position.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── 6.5 DOCKABLE PANEL ─────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Dockable Panel</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Dockable Panel</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Toggles visibility of the main BimTasks dockable panel. The panel hosts
+      multiple content views (Filter Tree, Element Calculation, etc.) that other
+      commands switch between.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Dockable Panel</strong>.</li>
+      <li>Resolves dockable pane via <code>uiApp.GetDockablePane(BimTasksBootstrapper.DockablePaneId)</code>.</li>
+      <li>If shown &rarr; hide. If hidden &rarr; show.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/ToggleDockablePanelHandler.cs</span>
+      <span class="key-file">Views/BimTasksDockablePanel.xaml</span>
+      <span class="key-file">ViewModels/BimTasksDockablePanelViewModel.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">ALC Context</span>
+        <div class="info-text">
+          Uses <code>BimTasksBootstrapper.DockablePaneId</code> (isolated ALC), not
+          <code>BimTasksApp.DockablePaneId</code> (default ALC). ID must match the one
+          used during <code>RegisterDockablePane()</code> in startup.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 6.6 FLOATING TOOLBAR ───────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Floating Toolbar</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Floating Toolbar</span>
+    </div>
+    <span class="status status-broken">Broken</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Publishes <code>ToggleFloatingToolbarEvent</code> to show/hide a modeless floating
+      toolbar window with grouped command buttons. The toolbar window uses a singleton
+      pattern (hides on close instead of disposing).
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Floating Toolbar</strong>.</li>
+      <li>Publishes <code>ToggleFloatingToolbarEvent</code>.</li>
+      <li><code>FloatingToolbarViewModel</code> handles the event and toggles window visibility.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/ToggleToolbarHandler.cs</span>
+      <span class="key-file">ViewModels/FloatingToolbarViewModel.cs</span>
+      <span class="key-file">Views/FloatingToolbarWindow.xaml</span>
+    </div>
+
+    <div class="issue-card" style="margin-top:1rem;">
+      <div class="issue-title">Not Working &mdash; Needs Debugging</div>
+      <div class="issue-body">
+        <p>The floating toolbar is currently non-functional. The exact failure mode has
+        not been diagnosed. Likely related to the toolbar window lifecycle, event
+        subscription timing, or ALC isolation issues with the singleton window pattern.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 6.7 EXPORT JSON ────────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Export JSON</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Export JSON</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Exports all model elements to JSON for the BIM Israel web application.
+      Extracts geometry, parameters, BOQ data, and Uniformat codes for 40+ categories.
+      Validates the export against Revit schedules and generates a discrepancy report.
+    </p>
+
+    <div class="diagram-wrap">
+      <div class="diagram-title">Export JSON &mdash; Pipeline</div>
+      <div class="mermaid">
+graph LR
+  A["Ensure validation\nschedules exist"] --> B["User picks\nsave location"]
+  B --> C["Extract elements\n(40+ categories)"]
+  C --> D["Save elements.json\n+ validation.json"]
+  D --> E["Compare export\nvs Revit schedules"]
+  E --> F{"Discrepancies?"}
+  F -->|None| G["✓ All verified"]
+  F -->|Found| H["⚠ Show\ndiscrepancy report"]
+
+  style A fill:#1e3a5f,color:#fff
+  style C fill:#7c3aed,color:#fff
+  style G fill:#166534,color:#fff
+  style H fill:#9a3412,color:#fff
+      </div>
+    </div>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Export JSON</strong>.</li>
+      <li>Creates <code>BIM_Validation_*</code> schedules if missing (for post-export comparison).</li>
+      <li>Save dialog &rarr; default name: <code>{title}_{timestamp}.json</code>.</li>
+      <li>Extracts all elements from active view, filtered by view phase.</li>
+      <li>Generates validation summary (counts + totals by category/family).</li>
+      <li>Saves elements JSON + validation JSON.</li>
+      <li>Compares export against Revit schedule totals (tolerance: 0.1 m&sup3;).</li>
+      <li>Shows results: verified count, discrepancies (top 5 by family), category breakdown.</li>
+    </ol>
+
+    <h4>Export Content</h4>
+    <p style="font-size:0.88rem; color:#374151;">
+      Each element in the JSON includes: <code>Id</code>, <code>Category</code>,
+      <code>FamilyName</code>, <code>TypeName</code>, <code>Level</code>,
+      <code>Volume</code> (m&sup3;), <code>Area</code> (m&sup2;), <code>Length</code> (m),
+      <code>BoqCode</code>, <code>Zone</code>, <code>WorkStage</code>,
+      <code>SeifChoze</code>, <code>SubcontractorName</code>, and more.
+      Uses <code>System.Text.Json</code> with <code>UnsafeRelaxedJsonEscaping</code>
+      for Hebrew character support.
+    </p>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/WebAppDataExtractorHandler.cs</span>
+      <span class="key-file">Services/DataExtractorService.cs</span>
+      <span class="key-file">Models/BimElementDto.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">No Transaction</span>
+        <div class="info-text">Read-only export. Schedule creation is the only modification (if needed).</div>
+      </div>
+      <div class="info-box tip">
+        <span class="info-label">Validation</span>
+        <div class="info-text">
+          Compares export counts/volumes against Revit validation schedules.
+          Stair runs/landings are excluded from comparison (calculated in parent).
+        </div>
+      </div>
+    </div>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Hardcoded Category Mappings</div>
+      <div class="improve-body">
+        <p>24 category-to-schedule-name mappings are hardcoded in the handler.
+        If validation schedule names differ from expected, comparison silently
+        skips those categories.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 6.8 VOICE CONTROL ──────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Voice Control</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Voice Control</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Toggles Vosk offline speech recognition on/off. When active, spoken commands
+      (e.g., "wall", "door", "copy", "undo", "section") trigger Revit actions.
+      Uses grammar-constrained recognition via NAudio microphone input.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Voice Control</strong>.</li>
+      <li>Resolves <code>IVoskVoiceService</code> from DI.</li>
+      <li>Calls <code>voiceService.Toggle()</code> &mdash; starts or stops recognition.</li>
+      <li>Shows status: started (with command list), stopped, or not available.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/ToggleVoskVoiceRecognitionHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Dependencies</span>
+        <div class="info-text">
+          Requires Vosk + NAudio packages and a Vosk language model directory.
+          If missing, shows "not available" message.
+        </div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">Offline</span>
+        <div class="info-text">All recognition runs locally &mdash; no internet required.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── 6.9 FILTER TO LEGEND ───────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Filter to Legend Drafting</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Filter Legend Drafting</span>
+    </div>
+    <span class="status status-needs-improvement">Needs Improvement</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Collects view filters with color overrides from the active view, then creates
+      a drafting view legend with color swatches and filter names. Can also update
+      an existing legend. Handles the notorious view-scale coordinate gotcha.
+    </p>
+
+    <div class="diagram-wrap">
+      <div class="diagram-title">Filter to Legend &mdash; Flow</div>
+      <div class="mermaid">
+graph TD
+  A["Collect view filters\nwith color overrides"] --> B["Find existing\nlegend views"]
+  B --> C["Show dialog:\nselect filters + mode"]
+  C --> D{"Create new\nor update?"}
+  D -->|Create| E["Create drafting view\n(or duplicate legend)"]
+  D -->|Update| F["Clear existing\nview elements"]
+  E --> G["Draw color swatches\n(FilledRegion)"]
+  F --> G
+  G --> H["Place filter name\ntext (TextNote)"]
+  H --> I["Switch to\nlegend view"]
+
+  style A fill:#1e3a5f,color:#fff
+  style C fill:#7c3aed,color:#fff
+  style G fill:#166534,color:#fff
+      </div>
+    </div>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Filter Legend Drafting</strong>.</li>
+      <li>Handler collects all filters on the active view with valid color overrides (surface foreground, then cut foreground fallback).</li>
+      <li><code>FilterToLegendDialog</code> opens: filter checklist with color swatches, reorder buttons, create/update mode selector.</li>
+      <li>User selects filters and mode.</li>
+      <li><strong>Create:</strong> <code>LegendBuilder.CreateLegend()</code> creates a new drafting view (or duplicates an existing "empty" legend).</li>
+      <li><strong>Update:</strong> <code>LegendBuilder.UpdateLegend()</code> clears all elements from target view first.</li>
+      <li>Draws color swatches as <code>FilledRegion</code> elements (12&times;6mm, <code>IsMasking = false</code>).</li>
+      <li>Places filter names as <code>TextNote</code> elements (2.5mm text, 4mm gap from swatch).</li>
+      <li>Switches active view to the new/updated legend.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/FilterToLegendHandler.cs</span>
+      <span class="key-file">Helpers/LegendBuilder.cs</span>
+      <span class="key-file">Views/FilterToLegendDialog.xaml</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">TransactionGroup</span>
+        <div class="info-text">
+          Wraps view creation + population in a <code>TransactionGroup</code> with
+          <code>Assimilate()</code> for single undo.
+        </div>
+      </div>
+      <div class="info-box tip">
+        <span class="info-label">View Scale Fix</span>
+        <div class="info-text">
+          All coordinates multiplied by <code>view.Scale</code> &mdash; Revit internally
+          divides by scale, so swatch positions must compensate. This was a
+          common source of bugs (all elements at same point).
+        </div>
+      </div>
+    </div>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Not Yet Deployed or Tested</div>
+      <div class="improve-body">
+        <p>The view scale fix has been applied in code but has not been deployed to
+        a live Revit session for testing. The fix is theoretically correct but
+        needs validation with different view scales.</p>
+      </div>
+    </div>
+    <div class="improve-card">
+      <div class="improve-title">Hardcoded Swatch Dimensions</div>
+      <div class="improve-body">
+        <p>Swatch size (12&times;6mm), row pitch (12mm), text-to-swatch gap (4mm), and text
+        height (2.5mm) are all hardcoded constants. Works well for typical legends
+        but not configurable for different scales or layouts.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 6.10 DETECT OVERLAPPING WALLS ──────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Detect Overlapping Walls</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Detect Overlaps</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Finds same-type walls occupying nearly the same physical space (stacked duplicates).
+      Uses a 2-stage detection: 2D pre-filter (parallel check, perpendicular distance, overlap length)
+      then 3D solid intersection via <code>BooleanOperationsUtils</code>. Shows results
+      with 3 action options.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Detect Overlaps</strong>.</li>
+      <li>Uses selected walls if any, otherwise all walls in active view.</li>
+      <li><code>OverlappingWallsDetector.FindOverlappingWalls()</code> runs 2-stage detection.</li>
+      <li>Results dialog shows groups: overlap %, wall type, wall count, wall to keep (most hosted elements).</li>
+      <li>User chooses action:
+        <ul>
+          <li><strong>Highlight:</strong> Select + temporarily isolate overlapping walls.</li>
+          <li><strong>Unjoin:</strong> Unjoin all geometry joins within groups.</li>
+          <li><strong>Delete Duplicates:</strong> Keep wall with most hosted elements, delete others.</li>
+        </ul>
+      </li>
+    </ol>
+
+    <h4>Detection Thresholds</h4>
+    <table class="data-table" style="margin:0.5rem 0 1rem 0;">
+      <thead>
+        <tr>
+          <th>Threshold</th>
+          <th>Value</th>
+          <th>Purpose</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Angular tolerance</td><td>~1&deg;</td><td>Walls must be parallel</td></tr>
+        <tr><td>Perpendicular distance</td><td>&lt; 50% wall width</td><td>Walls must be close</td></tr>
+        <tr><td>Min overlap length</td><td>50mm</td><td>Prevents endpoint-touching false positives</td></tr>
+        <tr><td>Min overlap %</td><td>&ge; 1%</td><td>Filters near-misses</td></tr>
+        <tr><td>Display threshold</td><td>&ge; 50% width overlap</td><td>Only shows significant overlaps</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/DetectOverlappingWallsHandler.cs</span>
+      <span class="key-file">Helpers/OverlappingWallDetector/OverlappingWallsDetector.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">3D Fallback</span>
+        <div class="info-text">
+          Boolean solid intersection can fail on degenerate geometry. Falls back to
+          2D estimate: <code>(wallWidth - perpDist) / wallWidth &times; 100</code>.
+        </div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">Keep Logic</span>
+        <div class="info-text">
+          Wall with most hosted elements (doors/windows/generics) is kept.
+          Ties broken by oldest ElementId.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 6.11 FLOOR FROM DWG PICK ───────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Floor From DWG Pick</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Floor From DWG Pick</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Interactive single-floor creation: user picks a point on a DWG hatch or edge,
+      the system extracts the face boundary, builds a closed curve loop, and creates
+      a floor element at the selected type and level.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Floor From DWG Pick</strong>.</li>
+      <li>User picks a point on a DWG import (only <code>ImportInstance</code> elements selectable).</li>
+      <li>Extracts face geometry at pick point; falls back to nearest face by centroid.</li>
+      <li>Builds closed <code>CurveLoop</code> from boundary curves (flattens to XY, closes micro-gaps &le; 3mm).</li>
+      <li>Floor type/level selector dialog appears (defaults to active view's level).</li>
+      <li>Creates floor in single transaction.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/PickAndCreateFloorHandler.cs</span>
+      <span class="key-file">Helpers/DwgGeometryExtractor.cs</span>
+      <span class="key-file">Helpers/FloorCreator.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Transaction</span>
+        <div class="info-text">
+          Single transaction: <code>"Create Floor from DWG"</code>. Rolled back if creation fails.
+        </div>
+      </div>
+      <div class="info-box note">
+        <span class="info-label">Geometry Fallback</span>
+        <div class="info-text">
+          If <code>GetGeometryObjectFromReference()</code> fails (common with DWG sub-elements),
+          falls back to brute-force nearest face search by centroid distance.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── 6.12 FLOORS FROM DWG ALL ───────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Floors From DWG All</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Floors From DWG All</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      Batch floor creation: user picks a DWG import, the system extracts ALL visible
+      floor-sized face boundaries, deduplicates near-duplicates, chains loose curves
+      into closed loops, and creates floors for all valid boundaries.
+    </p>
+
+    <div class="diagram-wrap">
+      <div class="diagram-title">Floors From DWG All &mdash; Pipeline</div>
+      <div class="mermaid">
+graph TD
+  A["Pick DWG import"] --> B["Select floor type\n+ level"]
+  B --> C["Extract all geometry\n(faces + loose curves)"]
+  C --> D["Build CurveLoops\nfrom face boundaries"]
+  C --> E["Chain loose curves\ninto closed loops"]
+  D --> F["Filter: area ≥ 5 m²"]
+  E --> F
+  F --> G["Deduplicate:\ncentroid + area match"]
+  G --> H["Confirm with user:\nvalid / skipped / errors"]
+  H --> I["Create all floors\nin single transaction"]
+
+  style A fill:#1e3a5f,color:#fff
+  style C fill:#7c3aed,color:#fff
+  style G fill:#6d28d9,color:#fff
+  style I fill:#166534,color:#fff
+      </div>
+    </div>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Floors From DWG All</strong>.</li>
+      <li>User picks a DWG <code>ImportInstance</code>.</li>
+      <li>Floor type/level selector dialog.</li>
+      <li>Extracts all geometry: horizontal faces (normal Z &gt; 0.5) + loose curves.</li>
+      <li>Builds CurveLoops from face boundaries; chains loose curves into closed loops.</li>
+      <li>Filters out loops with area &lt; 5 m&sup2;.</li>
+      <li>Deduplicates: centroid within 3mm AND area within 1 sqft &rarr; duplicate.</li>
+      <li>Confirmation dialog with counts (valid, skipped-small, skipped-duplicate, errors).</li>
+      <li>Creates all floors in single transaction. Commits if &ge;1 created; rolls back if all fail.</li>
+    </ol>
+
+    <h4>Configuration Constants</h4>
+    <table class="data-table" style="margin:0.5rem 0 1rem 0;">
+      <thead>
+        <tr>
+          <th>Constant</th>
+          <th>Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Min area</td><td>5.0 m&sup2; (~54 sqft)</td></tr>
+        <tr><td>Closure tolerance</td><td>0.01 ft (~3mm)</td></tr>
+        <tr><td>Chain tolerance</td><td>0.01 ft (~3mm)</td></tr>
+        <tr><td>Dedup tolerance (centroid)</td><td>0.005 ft</td></tr>
+        <tr><td>Dedup tolerance (area)</td><td>1.0 sqft</td></tr>
+        <tr><td>Horizontal normal threshold</td><td>Z &gt; 0.5</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/ImportAllDwgFloorsHandler.cs</span>
+      <span class="key-file">Helpers/DwgGeometryExtractor.cs</span>
+      <span class="key-file">Helpers/FloorCreator.cs</span>
+      <span class="key-file">Helpers/CurveChainer.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Transaction</span>
+        <div class="info-text">Single transaction: <code>"Import DWG Floors"</code>. All-or-nothing if all fail.</div>
+      </div>
+      <div class="info-box tip">
+        <span class="info-label">Error Reporting</span>
+        <div class="info-text">
+          Results dialog shows first 10 error messages with count of remaining.
+          Detailed breakdown: valid, too-small, duplicate, geometry errors.
+        </div>
+      </div>
+    </div>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">No Undo Granularity</div>
+      <div class="improve-body">
+        <p>All floors (potentially 100+) are created in a single transaction.
+        A single undo removes all of them. No way to keep some and discard others
+        without manual deletion after the fact.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 6.13A CREATE SIMILAR ───────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Create Similar</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Create Similar (split button)</span>
+    </div>
+    <span class="status status-solid">Solid</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      User picks an element, and the system determines its family type and enters
+      Revit's built-in placement mode for that type. Essentially a "pick to place another" shortcut.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Create Similar</strong>.</li>
+      <li>User picks an element in the view.</li>
+      <li>Handler resolves the element's <code>ElementType</code> via <code>GetTypeId()</code>.</li>
+      <li>Calls <code>uidoc.PostRequestForElementTypePlacement(elementType)</code> &rarr; Revit handles placement UI.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/CreateSelectedItemHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">No Transaction</span>
+        <div class="info-text">Delegates entirely to Revit's built-in placement UI. Revit manages the transaction.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 6.13B PILES FROM DWG ───────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Piles From DWG</span>
+      <span class="cmd-ribbon">Ribbon: Tools &rarr; Piles From DWG (split button)</span>
+    </div>
+    <span class="status status-sketchy">Sketchy</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What It Does</h4>
+    <p>
+      User picks a DWG import. The system finds all arc elements on the <code>"fnd"</code>
+      (foundation) layer, then places a structural foundation family instance at each
+      arc center with diameter set to the arc diameter.
+    </p>
+
+    <h4>Workflow</h4>
+    <ol>
+      <li>Click <strong>Piles From DWG</strong>.</li>
+      <li>User picks a DWG import instance.</li>
+      <li><code>DwgWrapper</code> parses arcs on the <code>"fnd"</code> layer.</li>
+      <li>Finds <code>OST_StructuralFoundation</code> family type named <code>"Auto"</code>.</li>
+      <li>For each arc: places <code>NewFamilyInstance()</code> at arc center, sets diameter = arc diameter.</li>
+      <li>Reports total placed count.</li>
+    </ol>
+
+    <h4>Key Files</h4>
+    <div class="key-files">
+      <span class="key-file">Commands/Handlers/AddClunasFromDwgHandler.cs</span>
+    </div>
+
+    <div class="info-row" style="margin-top:1rem;">
+      <div class="info-box note">
+        <span class="info-label">Transaction</span>
+        <div class="info-text">Single transaction: <code>"Place Piles from DWG"</code>. All-or-nothing.</div>
+      </div>
+    </div>
+
+    <div class="issue-card" style="margin-top:1rem;">
+      <div class="issue-title">Hardcoded Family Name &amp; Layer</div>
+      <div class="issue-body">
+        <p>Requires family type named <code>"Auto"</code> in Structural Foundations and
+        DWG arcs on a layer named <code>"fnd"</code>. Both are hardcoded constants.
+        Projects using different naming conventions will get errors.</p>
+      </div>
+    </div>
+    <div class="issue-card">
+      <div class="issue-title">No Diameter Parameter Validation</div>
+      <div class="issue-body">
+        <p>Assumes a <code>"Diameter"</code> parameter exists and is writable on the foundation
+        family. If the parameter doesn't exist, the pile is placed but sized incorrectly
+        with no warning.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     CHAPTER SUMMARY
+     ══════════════════════════════════════════════════════════ -->
+<section class="section" style="margin-top:2rem;">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Tools &mdash; Summary</div>
+    </div>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Command</th>
+        <th>Type</th>
+        <th>Transactions</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Filter Tree</td>
+        <td>Event &rarr; dockable panel</td>
+        <td>None</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Calc Area &amp; Volume</td>
+        <td>Event &rarr; dockable panel</td>
+        <td>None</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Uniformat Codes</td>
+        <td>Modeless window</td>
+        <td>None</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Copy From Link</td>
+        <td>Dialog + batch copy</td>
+        <td>1 (or per-batch)</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Dockable Panel</td>
+        <td>Toggle visibility</td>
+        <td>None</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Floating Toolbar</td>
+        <td>Event &rarr; toggle window</td>
+        <td>None</td>
+        <td><span class="status status-broken">Broken</span></td>
+      </tr>
+      <tr>
+        <td>Export JSON</td>
+        <td>File export + validation</td>
+        <td>None (read-only)</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Voice Control</td>
+        <td>Toggle service</td>
+        <td>None</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Filter to Legend</td>
+        <td>Dialog + create view</td>
+        <td>TransactionGroup</td>
+        <td><span class="status status-needs-improvement">Needs Improvement</span></td>
+      </tr>
+      <tr>
+        <td>Detect Overlaps</td>
+        <td>Dialog + action</td>
+        <td>Per-action</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Floor From DWG Pick</td>
+        <td>Interactive pick + create</td>
+        <td>1</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Floors From DWG All</td>
+        <td>Batch import</td>
+        <td>1 (all-or-nothing)</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Create Similar</td>
+        <td>Pick + Revit placement</td>
+        <td>None (Revit manages)</td>
+        <td><span class="status status-solid">Solid</span></td>
+      </tr>
+      <tr>
+        <td>Piles From DWG</td>
+        <td>Batch place from arcs</td>
+        <td>1</td>
+        <td><span class="status status-sketchy">Sketchy</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:1.5rem;">
+    <div style="font-weight:700; font-size:0.9rem; color:#1e3a5f; margin-bottom:0.75rem;">Cross-Cutting Observations</div>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>Three command patterns emerge:</strong> (1) event publishers that switch dockable panel
+      content (Filter Tree, Calc Area), (2) dialog-driven workflows with transactions (Copy From Link,
+      Filter to Legend, Detect Overlaps), and (3) interactive pick-and-create tools (Floor DWG, Create Similar, Piles).</li>
+      <li><strong>DWG floor tools are the most robust</strong> &mdash; multi-stage geometry extraction
+      with configurable tolerances, deduplication, curve chaining, and detailed error reporting.
+      The batch variant handles edge cases (small areas, duplicates, geometry errors) gracefully.</li>
+      <li><strong>The floating toolbar is the only broken command</strong> in the entire add-in.
+      All other commands function at least at a "sketchy" level.</li>
+      <li><strong>Export JSON is the most complex command</strong> &mdash; 10-step pipeline with
+      40+ category extraction, validation schedule creation, element-by-element geometry reading,
+      and post-export comparison against Revit schedules. The validation step catches data loss
+      that would otherwise go unnoticed.</li>
+      <li><strong>Piles From DWG is the most fragile</strong> &mdash; hardcoded family name ("Auto"),
+      layer name ("fnd"), and parameter name ("Diameter") make it project-specific with no
+      configurability.</li>
+      <li><strong>Copy From Link has elegant error recovery</strong> &mdash; batch-all attempt with
+      automatic fallback to chunked copy (20/batch) with a 5-failure circuit breaker. This pattern
+      could be applied to other batch operations.</li>
+    </ul>
+  </div>
+</section>
+
+
+<div class="page-break"></div>
+<a id="ch-issues"></a>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     SECTION 7 — CROSS-CUTTING ISSUES
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-header">
+    <span class="section-num">7</span>
+    <div>
+      <div class="section-title">Cross-Cutting Issues</div>
+      <div class="section-desc">Architectural debt, systemic patterns, and improvement opportunities</div>
+    </div>
+  </div>
+
+  <p style="font-size:0.88rem; color:#374151; margin-bottom:1rem;">
+    This chapter collects issues that span multiple commands or affect the add-in's
+    architecture as a whole. Per-command issues are documented inline in their respective
+    chapters (2&ndash;6). These are the patterns that emerged across the full codebase review.
+  </p>
+</section>
+
+<!-- ── 7.1 ALC ISOLATION FRAGILITY ────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">ALC Isolation Fragility</span>
+    </div>
+    <span class="status status-needs-improvement">Architectural</span>
+  </div>
+  <div class="cmd-body">
+    <h4>The Problem</h4>
+    <p>
+      The entire add-in runs inside an <code>AssemblyLoadContext("BimTasksIsolated")</code>
+      to keep Prism 9, Unity, Vosk, and other dependencies away from Revit's default ALC.
+      The thin proxy layer in <code>BimTasksApp.cs</code> uses reflection to cross the boundary.
+    </p>
+    <p>This works, but creates several fragile seams:</p>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>Static fields are per-ALC.</strong> A static property set in the default ALC
+      (e.g., <code>BimTasksApp.DockablePaneId</code>) reads as <code>null</code> from the isolated ALC.
+      Every cross-ALC reference must go through reflection or shared interfaces.</li>
+      <li><strong>WPF bindings may not update source</strong> when the DataContext lives in the isolated ALC.
+      <code>HierarchicalDataTemplate</code> bindings are particularly affected &mdash; explicit code-behind
+      event handlers are needed as workarounds.</li>
+      <li><strong>Type identity breaks across ALCs.</strong> An <code>IExternalCommand</code> loaded in the
+      isolated ALC is not the same type as <code>IExternalCommand</code> in the default ALC.
+      This is why proxy commands exist at all.</li>
+      <li><strong>Debugging is harder.</strong> Stack traces show reflection invoke boundaries.
+      Breakpoints in isolated-ALC code require the debugger to attach to the correct context.</li>
+    </ul>
+
+    <h4>Affected Components</h4>
+    <div class="key-files">
+      <span class="key-file">BimTasksApp.cs (default ALC proxy)</span>
+      <span class="key-file">Infrastructure/BimTasksBootstrapper.cs (isolated ALC)</span>
+      <span class="key-file">Commands/Proxies/*.cs (all proxy commands)</span>
+    </div>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Recommendation</div>
+      <div class="improve-body">
+        <p>The ALC pattern is necessary but underdocumented. Consider adding a
+        <code>ARCHITECTURE.md</code> at the repo root explaining the ALC boundary,
+        what can/cannot cross it, and the proxy pattern rules. New commands will
+        inevitably hit these issues without guidance.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 7.2 HARDCODED DOMAIN ASSUMPTIONS ───────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Hardcoded Israeli Domain Assumptions</span>
+    </div>
+    <span class="status status-needs-improvement">Architectural</span>
+  </div>
+  <div class="cmd-body">
+    <h4>The Problem</h4>
+    <p>
+      Multiple commands embed Israeli construction conventions as hardcoded values
+      with no configuration mechanism:
+    </p>
+
+    <table class="data-table" style="margin:0.5rem 0 1rem 0;">
+      <thead>
+        <tr>
+          <th>Command</th>
+          <th>Hardcoded Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>BOQ Setup</td>
+          <td>Group name <code>"BIMIsrael_BOQ"</code></td>
+        </tr>
+        <tr>
+          <td>BOQ Schedules</td>
+          <td>Stage names: FOUNDATIONS, FRAME, BUILDING, FINISHES</td>
+        </tr>
+        <tr>
+          <td>BOQ AutoFill</td>
+          <td>Concrete detection via <code>"CONC"</code> substring</td>
+        </tr>
+        <tr>
+          <td>Contract Sections</td>
+          <td>4 Hebrew parameter names as Unicode escapes</td>
+        </tr>
+        <tr>
+          <td>Export JSON</td>
+          <td>24 category-to-schedule-name mappings</td>
+        </tr>
+        <tr>
+          <td>Piles From DWG</td>
+          <td>Family <code>"Auto"</code>, layer <code>"fnd"</code>, param <code>"Diameter"</code></td>
+        </tr>
+        <tr>
+          <td>Cladding commands</td>
+          <td>Hardcoded wall type names for inner/outer/insulation layers</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Recommendation</div>
+      <div class="improve-body">
+        <p>Extract domain-specific constants to a configuration file (JSON/XML alongside the DLL)
+        or a settings UI. This would make the add-in usable for non-Israeli projects without
+        code changes. Low priority for a personal tool, but high impact if ever shared.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 7.3 SILENT FAILURES ────────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Silent Failure Patterns</span>
+    </div>
+    <span class="status status-needs-improvement">Systemic</span>
+  </div>
+  <div class="cmd-body">
+    <h4>The Problem</h4>
+    <p>
+      Several commands swallow exceptions or return default values without notifying
+      the user. The per-element try/catch pattern is good for resilience (one bad
+      element shouldn't abort the batch), but the reporting side often loses the detail:
+    </p>
+
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>BOQ Schedules:</strong> Empty try/catch in <code>FindField()</code>,
+      <code>AddSortGroup()</code>, <code>AddFilterHasValue()</code>. Schedules appear correct
+      but may have no sorting or filtering.</li>
+      <li><strong>BOQ AutoFill:</strong> COMP items silently skipped (no log, no explanation
+      in results). Geometry fallback returns 0 without warning.</li>
+      <li><strong>BOQ Calc Price:</strong> <code>EffUnitPrice = 0</code> marked as success when no
+      matching physical items found. User can't distinguish "genuinely zero" from "data missing."</li>
+      <li><strong>Contract Sections:</strong> Middle parameters may be unbound (only first/last checked).
+      Key row insertion may update wrong element.</li>
+      <li><strong>Export JSON:</strong> Category comparison silently skips if schedule name doesn't match mapping.</li>
+    </ul>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Recommendation</div>
+      <div class="improve-body">
+        <p>Add a "warnings" section to results dialogs. Currently most commands report
+        "X succeeded, Y failed" but no "Z completed with caveats." A three-tier result
+        (success / warning / error) would surface these silent issues without blocking the workflow.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 7.4 TRANSACTION PATTERNS ───────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Transaction Patterns &amp; Consistency</span>
+    </div>
+    <span class="status status-solid">Observation</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What's Good</h4>
+    <p>
+      Transaction discipline is consistent across the codebase:
+    </p>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li>All handlers use <code>[Transaction(TransactionMode.Manual)]</code>.</li>
+      <li>Complex workflows use <code>TransactionGroup</code> with <code>Assimilate()</code>
+      (Split Wall's 4-transaction pipeline, Filter to Legend's create + populate).</li>
+      <li>Batch operations commit if &ge;1 success, rollback if all fail.</li>
+      <li>Read-only commands (Filter Tree, Calc Area, Export JSON) correctly avoid transactions.</li>
+    </ul>
+
+    <h4>Areas of Concern</h4>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>TransactionGroup.Assimilate() invalidates Element refs</strong> &mdash; code must
+      re-fetch by <code>ElementId</code> after assimilation. Most code handles this, but it's
+      a recurring source of bugs when adding new features to multi-transaction commands.</li>
+      <li><strong>Copy From Link</strong> uses a different pattern (batch → chunked fallback) that
+      creates per-batch transactions in the fallback path. This means partial results are possible
+      (some chunks committed, some failed).</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ── 7.5 ERROR HANDLING CONSISTENCY ─────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Error Handling &amp; Reporting</span>
+    </div>
+    <span class="status status-solid">Observation</span>
+  </div>
+  <div class="cmd-body">
+    <h4>What's Good</h4>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li>Per-element try/catch throughout &mdash; one bad element never aborts the batch.</li>
+      <li>Serilog logging at every major step (Information for flow, Warning for recoverable, Error for fatal).</li>
+      <li>TaskDialog for user-facing results with success/error counts.</li>
+      <li><code>OperationCanceledException</code> caught gracefully (user pressed Esc).</li>
+    </ul>
+
+    <h4>What's Inconsistent</h4>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>Some handlers use <code>TaskDialog.Show()</code> directly</strong>, others use
+      helper methods. No shared result dialog component.</li>
+      <li><strong>Error message detail varies wildly</strong> &mdash; Export JSON shows file paths
+      and validation breakdown; Piles From DWG shows just a count.</li>
+      <li><strong>Serilog log levels are inconsistent</strong> &mdash; some handlers log expected
+      conditions (e.g., "no elements selected") as Warning, others as Information.</li>
+    </ul>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Recommendation</div>
+      <div class="improve-body">
+        <p>Create a shared <code>CommandResult</code> class with success/warning/error counts
+        and a <code>ShowResultDialog()</code> method. This would standardize reporting
+        across all handlers and make the three-tier result pattern easy to adopt.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 7.6 ELEMENT INVALIDATION ───────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Element Reference Invalidation</span>
+    </div>
+    <span class="status status-needs-improvement">Systemic</span>
+  </div>
+  <div class="cmd-body">
+    <h4>The Problem</h4>
+    <p>
+      Revit <code>Element</code> objects become invalid after transactions that modify or delete them.
+      <code>TransactionGroup.Assimilate()</code> also invalidates in-memory references.
+      Accessing properties on an invalid element throws <code>InvalidOperationException</code>.
+    </p>
+
+    <h4>Current Mitigations</h4>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><code>Element.IsValidObject</code> checks before property access (used in Wall Splitter, Detect Overlaps).</li>
+      <li>Store <code>ElementId</code> instead of <code>Element</code> and re-fetch after transactions (used in Filter Tree).</li>
+      <li>Re-collecting elements after <code>Assimilate()</code> (used in Split Wall pipeline).</li>
+    </ul>
+
+    <h4>Where It's Not Handled</h4>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>Detect Overlapping Walls:</strong> stores wall list (not IDs) &mdash; safe only because
+      all operations are within a single transaction, but if the transaction model changes, walls could go stale.</li>
+      <li><strong>Contract Sections:</strong> key element references retrieved after row insertion
+      may be invalid if Revit's internal schedule restructuring runs between operations.</li>
+    </ul>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Recommendation</div>
+      <div class="improve-body">
+        <p>Adopt a consistent "store ElementId, re-fetch on use" pattern across all handlers.
+        The current mixed approach (some store Elements, some store IDs) is a maintenance risk.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── 7.7 SERVICE RESOLUTION TIMING ──────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Service Resolution Timing</span>
+    </div>
+    <span class="status status-needs-improvement">Architectural</span>
+  </div>
+  <div class="cmd-body">
+    <h4>The Problem</h4>
+    <p>
+      Services are registered in <code>BimTasksBootstrapper.OnFirstIdle()</code> (phase 3 of startup).
+      ViewModels that resolve services in their constructors will fail if constructed before
+      <code>OnFirstIdle()</code> fires. The dockable panel ViewModel was explicitly designed to
+      avoid this, but new ViewModels could easily fall into the trap.
+    </p>
+
+    <h4>Current Mitigation</h4>
+    <p style="font-size:0.88rem; color:#374151;">
+      <code>BimTasksDockablePanelViewModel</code> uses lazy resolution &mdash; services are resolved
+      on first use, not in the constructor. This works but is not enforced by the framework.
+    </p>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Recommendation</div>
+      <div class="improve-body">
+        <p>Document the "no constructor resolution" rule prominently. Consider a base ViewModel
+        class that provides lazy service accessors, making the pattern easy to follow for new code.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 7.8 FLOATING TOOLBAR ───────────────────────────────── -->
+<div class="cmd-card">
+  <div class="cmd-card-header">
+    <div>
+      <span class="cmd-name">Floating Toolbar &mdash; Known Broken</span>
+    </div>
+    <span class="status status-broken">Broken</span>
+  </div>
+  <div class="cmd-body">
+    <h4>The Problem</h4>
+    <p>
+      The floating toolbar is the only fully broken feature in the add-in. It has not been
+      debugged yet. Likely causes:
+    </p>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>Window lifecycle:</strong> Singleton pattern (cancel close &rarr; hide) may conflict
+      with WPF's window state in the isolated ALC.</li>
+      <li><strong>Event subscription timing:</strong> <code>ToggleFloatingToolbarEvent</code> may fire
+      before the subscriber is wired up.</li>
+      <li><strong>ALC boundary:</strong> WPF modeless windows in isolated ALCs have known issues
+      with owner assignment and dispatcher affinity.</li>
+      <li><strong>Command dispatch:</strong> Toolbar buttons need to invoke commands through
+      <code>ICommandDispatcherService</code>, which requires Revit API thread access.
+      If the dispatch path is broken, buttons appear but do nothing.</li>
+    </ul>
+
+    <div class="improve-card" style="margin-top:1rem;">
+      <div class="improve-title">Debugging Plan</div>
+      <div class="improve-body">
+        <p>
+          1. Verify <code>ToggleFloatingToolbarEvent</code> reaches the subscriber (add Serilog trace).<br/>
+          2. Check if the window is created and shown (may be off-screen or behind Revit).<br/>
+          3. Test button click &rarr; <code>ICommandDispatcherService.Enqueue()</code> path.<br/>
+          4. If window shows but buttons fail, the ALC command dispatch path is broken.<br/>
+          5. If window doesn't show, check WPF owner/dispatcher affinity in isolated ALC.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 7.9 OVERALL STATUS ─────────────────────────────────── -->
+<section class="section" style="margin-top:2rem;">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Overall Add-In Status</div>
+    </div>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Status</th>
+        <th>Count</th>
+        <th>Commands</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="status status-solid">Solid</span></td>
+        <td>24</td>
+        <td>Sync Phases, Copy Linked, Wall Height, Split Wall, Trim Corners, Detect Overlaps,
+        Window Families, Join Walls &amp; Floors, Split Floor, Join Beams to Walls,
+        Export Schedule, Edit In Excel, BOQ Setup, BOQ Schedules, BOQ Calc Price,
+        Filter Tree, Calc Area, Uniformat, Copy From Link, Dockable Panel,
+        Export JSON, Voice, Floor DWG Pick, Floors DWG All, Create Similar</td>
+      </tr>
+      <tr>
+        <td><span class="status status-sketchy">Sketchy</span></td>
+        <td>7</td>
+        <td>Wall To Floors, Cladding (x3), Beams To Ground, Import Key Schedules,
+        BOQ AutoFill, Contract Sections, Piles From DWG</td>
+      </tr>
+      <tr>
+        <td><span class="status status-needs-improvement">Needs Improvement</span></td>
+        <td>1</td>
+        <td>Filter to Legend (untested scale fix)</td>
+      </tr>
+      <tr>
+        <td><span class="status status-broken">Broken</span></td>
+        <td>1</td>
+        <td>Floating Toolbar</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:1.5rem;">
+    <div style="font-weight:700; font-size:0.9rem; color:#1e3a5f; margin-bottom:0.75rem;">Summary</div>
+    <ul style="font-size:0.88rem; color:#374151; padding-left:1.4rem; line-height:1.7;">
+      <li><strong>31+ commands implemented across 5 ribbon panels.</strong> The add-in is functionally
+      comprehensive for its target domain (Israeli BIM construction projects).</li>
+      <li><strong>73% of commands are solid</strong> &mdash; well-implemented with proper error handling,
+      transactions, and user feedback.</li>
+      <li><strong>Only 1 command is fully broken</strong> (Floating Toolbar) and 1 needs testing
+      (Filter to Legend). The rest work in production.</li>
+      <li><strong>The main architectural risks</strong> are ALC isolation fragility, hardcoded domain
+      assumptions, and silent failure patterns. None are blocking &mdash; they're maintenance
+      and extensibility concerns.</li>
+      <li><strong>The strongest areas</strong> are the schedule export pipeline (27-style professional formatting),
+      the wall splitter (4-transaction pipeline with compound layer analysis), and the DWG floor
+      import tools (multi-stage geometry extraction with robust error handling).</li>
+    </ul>
+  </div>
+</section>
+
+
+</div><!-- /container -->
+</body>
+</html>

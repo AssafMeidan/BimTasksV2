@@ -49,7 +49,7 @@ namespace BimTasksV2.Commands.Handlers
                     return;
                 }
 
-                var groups = OverlappingWallsDetector.FindOverlappingWalls(walls);
+                var groups = OverlappingWallsDetector.FindOverlappingWalls(walls, doc);
 
                 if (groups.Count == 0)
                 {

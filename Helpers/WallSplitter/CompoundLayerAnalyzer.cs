@@ -80,11 +80,9 @@ namespace BimTasksV2.Helpers.WallSplitter
                 double layerCenterFromExterior = runningDistance + thickness / 2.0;
 
                 // Offset from location line: positive = toward exterior = wall.Orientation direction
+                // Wall.Orientation already points toward the physical exterior regardless of flip,
+                // so no flip adjustment is needed here.
                 double centerOffset = locationLineFromExterior - layerCenterFromExterior;
-
-                // Account for wall flip
-                if (wall.Flipped)
-                    centerOffset = -centerOffset;
 
                 string materialName = "";
                 if (layer.MaterialId != ElementId.InvalidElementId)

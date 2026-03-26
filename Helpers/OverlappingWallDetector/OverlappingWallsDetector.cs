@@ -22,6 +22,7 @@ namespace BimTasksV2.Helpers.OverlappingWallDetector
     /// Detects walls of the same type that occupy the same physical space.
     /// Two same-type walls are "overlapping" when their centerline curves are nearly
     /// coincident (parallel, close together, and span the same length).
+    /// Uses a fast 2D pre-filter, then a precise 3D solid intersection for final overlap %.
     /// </summary>
     public static class OverlappingWallsDetector
     {
@@ -51,7 +52,7 @@ namespace BimTasksV2.Helpers.OverlappingWallDetector
         /// <summary>
         /// Finds groups of same-type walls that overlap each other.
         /// </summary>
-        public static List<OverlappingWallGroup> FindOverlappingWalls(IList<Wall> walls)
+        public static List<OverlappingWallGroup> FindOverlappingWalls(IList<Wall> walls, Document? doc = null)
         {
             var byType = walls
                 .Where(w => w.Location is LocationCurve)
@@ -93,26 +94,130 @@ namespace BimTasksV2.Helpers.OverlappingWallDetector
                     {
                         visited.Add(wallList[i].Id);
 
-                        // Width overlap: how much of the wall width is shared
-                        // wallWidth = total width. Two same-type walls overlap by (width - perpDist)
-                        // When perpDist=0, overlap=100%. When perpDist=width, overlap=0%.
-                        double wallWidth = wallList[i].Width;
-                        double widthOverlap = wallWidth > 0
-                            ? Math.Max(0, (wallWidth - minPerpDist) / wallWidth) * 100.0
-                            : 100.0;
+                        double overlapPercent;
+
+                        if (doc != null)
+                        {
+                            // 3D solid intersection for accurate volume-based overlap
+                            overlapPercent = ComputeVolumeOverlapPercent(group, doc);
+                        }
+                        else
+                        {
+                            // Fallback: 2D width-based estimate
+                            double wallWidth = wallList[i].Width;
+                            overlapPercent = wallWidth > 0
+                                ? Math.Max(0, (wallWidth - minPerpDist) / wallWidth) * 100.0
+                                : 100.0;
+                        }
+
+                        // Only report groups with meaningful overlap
+                        if (overlapPercent < 1.0)
+                            continue;
 
                         result.Add(new OverlappingWallGroup
                         {
                             WallType = wallList[i].WallType,
                             Walls = group,
                             OverlapLength = maxOverlap,
-                            OverlapPercent = widthOverlap
+                            OverlapPercent = overlapPercent
                         });
                     }
                 }
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Computes volume overlap percentage for a group of walls using 3D solid boolean intersection.
+        /// Returns the max pairwise overlap % (intersection volume / smaller wall volume).
+        /// </summary>
+        private static double ComputeVolumeOverlapPercent(List<Wall> group, Document doc)
+        {
+            double maxPercent = 0;
+            var options = new Options { ComputeReferences = false, DetailLevel = ViewDetailLevel.Coarse };
+
+            for (int i = 0; i < group.Count; i++)
+            {
+                var solid1 = GetLargestSolid(group[i], options);
+                if (solid1 == null || solid1.Volume < 1e-9)
+                    continue;
+
+                for (int j = i + 1; j < group.Count; j++)
+                {
+                    var solid2 = GetLargestSolid(group[j], options);
+                    if (solid2 == null || solid2.Volume < 1e-9)
+                        continue;
+
+                    try
+                    {
+                        var intersection = BooleanOperationsUtils.ExecuteBooleanOperation(
+                            solid1, solid2, BooleanOperationsType.Intersect);
+
+                        if (intersection != null && intersection.Volume > 1e-9)
+                        {
+                            double smallerVolume = Math.Min(solid1.Volume, solid2.Volume);
+                            double pct = (intersection.Volume / smallerVolume) * 100.0;
+                            maxPercent = Math.Max(maxPercent, Math.Min(pct, 100.0));
+                        }
+                    }
+                    catch
+                    {
+                        // Boolean op can fail on degenerate geometry — fall back to 2D estimate
+                        double wallWidth = group[i].Width;
+                        if (wallWidth > 0)
+                        {
+                            var curve1 = ((LocationCurve)group[i].Location).Curve;
+                            var curve2 = ((LocationCurve)group[j].Location).Curve;
+                            if (curve1 is Line line1 && curve2 is Line line2)
+                            {
+                                var delta = line2.GetEndPoint(0) - line1.GetEndPoint(0);
+                                var perp = delta - line1.Direction.DotProduct(delta) * line1.Direction;
+                                double perpDist = Math.Sqrt(perp.X * perp.X + perp.Y * perp.Y);
+                                double pct = Math.Max(0, (wallWidth - perpDist) / wallWidth) * 100.0;
+                                maxPercent = Math.Max(maxPercent, pct);
+                            }
+                        }
+                    }
+                }
+            }
+
+            return maxPercent;
+        }
+
+        /// <summary>
+        /// Extracts the largest solid from an element's geometry.
+        /// </summary>
+        private static Solid? GetLargestSolid(Element element, Options options)
+        {
+            var geom = element.get_Geometry(options);
+            if (geom == null) return null;
+
+            Solid? largest = null;
+            double maxVol = 0;
+
+            foreach (var obj in geom)
+            {
+                switch (obj)
+                {
+                    case Solid s when s.Volume > maxVol:
+                        largest = s;
+                        maxVol = s.Volume;
+                        break;
+                    case GeometryInstance gi:
+                        foreach (var inner in gi.GetInstanceGeometry())
+                        {
+                            if (inner is Solid s2 && s2.Volume > maxVol)
+                            {
+                                largest = s2;
+                                maxVol = s2.Volume;
+                            }
+                        }
+                        break;
+                }
+            }
+
+            return largest;
         }
 
         /// <summary>

@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>1 — Architecture Overview | BimTasksV2 Guide</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<div class="container">
+
+<!-- ══════════════════════════════════════════════════════════
+     SECTION 1 — ARCHITECTURE OVERVIEW
+     ══════════════════════════════════════════════════════════ -->
+<section class="arch-section">
+
+  <div class="section-header">
+    <span class="section-num">1</span>
+    <div>
+      <div class="section-title">Architecture Overview</div>
+      <div class="section-desc">Bird's eye view &mdash; how the plugin boots, isolates itself, and executes commands</div>
+    </div>
+  </div>
+
+  <!-- ── WHY ISOLATION? ──────────────────────────────────── -->
+  <div class="callout">
+    <div class="callout-title">Why Two Worlds?</div>
+    <div class="callout-body">
+      <p>
+        Revit loads all add-ins into a shared <strong>default AssemblyLoadContext</strong>.
+        Other plugins (Enscape, Dynamo, pyRevit) ship their own versions of common DLLs.
+        If BimTasksV2 loaded Prism 9 and Unity directly, it would clash with whatever
+        Prism/DryIoc/Newtonsoft version another add-in already loaded.
+      </p>
+      <p style="margin-bottom:0;">
+        The solution: BimTasksV2 runs in an <strong>isolated ALC</strong> (<code>BimTasksIsolated</code>).
+        Only a thin proxy layer lives in the default context &mdash; it holds no references to
+        Prism, Unity, Serilog, or Vosk. The two worlds communicate through <strong>reflection</strong>
+        and Revit's own API types (which are shared).
+      </p>
+    </div>
+  </div>
+
+  <!-- ── THE TWO ALCs ────────────────────────────────────── -->
+  <div class="diagram-wrap">
+    <div class="diagram-title">The Two Assembly Load Contexts</div>
+    <div class="mermaid">
+graph LR
+  subgraph DEFAULT["Default ALC (Revit's world)"]
+    BA["BimTasksApp\n(IExternalApplication)"]
+    RB["RibbonBuilder"]
+    PC["ProxyCommands\n(IExternalCommand)"]
+  end
+
+  subgraph ISOLATED["Isolated ALC (BimTasksIsolated)"]
+    BS["BimTasksBootstrapper"]
+    UC["Unity Container"]
+    SVC["Services"]
+    HND["Command Handlers"]
+    VM["ViewModels"]
+    VW["Views (WPF)"]
+    EVT["Prism Events"]
+  end
+
+  BA -->|"reflection\n(no type refs)"| BS
+  PC -->|"reflection\n(Activator.CreateInstance)"| HND
+  BS --> UC
+  UC --> SVC
+  UC --> HND
+  UC --> VM
+  VM --> VW
+  SVC --> EVT
+
+  style DEFAULT fill:#f8fafc,stroke:#94a3b8,color:#1e293b
+  style ISOLATED fill:#eff6ff,stroke:#3b82f6,color:#1e293b
+  style BA fill:#1e3a5f,color:#fff
+  style BS fill:#1e40af,color:#fff
+  style UC fill:#7c3aed,color:#fff
+    </div>
+  </div>
+
+  <div class="info-row">
+    <div class="info-box note">
+      <span class="info-label">Default ALC Rule</span>
+      <div class="info-text">
+        <code>BimTasksApp</code>, <code>RibbonBuilder</code>, and all proxy commands must
+        <strong>never</strong> reference Prism, Unity, Serilog, or Vosk types.
+        Only Revit API types and System types are allowed.
+      </div>
+    </div>
+    <div class="info-box gotcha">
+      <span class="info-label">Shared Types</span>
+      <div class="info-text">
+        Revit API DLLs (<code>RevitAPI</code>, <code>RevitAPIUI</code>), WPF framework assemblies,
+        and all <code>System.*</code> assemblies resolve from the default context &mdash; both ALCs
+        see the same types. This is what makes reflection calls possible.
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<div class="page-break"></div>
+
+<!-- ══════════════════════════════════════════════════════════
+     STARTUP LIFECYCLE
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+
+  <div class="section-header">
+    <span class="section-num">1.1</span>
+    <div>
+      <div class="section-title">Startup Lifecycle</div>
+      <div class="section-desc">Three-phase initialization &mdash; what happens and when</div>
+    </div>
+  </div>
+
+  <div class="diagram-wrap">
+    <div class="diagram-title">Initialization Timeline</div>
+    <div class="mermaid">
+sequenceDiagram
+  participant Revit
+  participant BimTasksApp as BimTasksApp<br/>(Default ALC)
+  participant Bootstrapper as BimTasksBootstrapper<br/>(Isolated ALC)
+
+  Note over Revit: Revit starts up
+  Revit->>BimTasksApp: OnStartup(UIControlledApplication)
+
+  rect rgb(239, 246, 255)
+    Note over BimTasksApp,Bootstrapper: Phase 1 — Initialize
+    BimTasksApp->>BimTasksApp: Create BimTasksLoadContext
+    BimTasksApp->>BimTasksApp: Load DLL into isolated ALC
+    BimTasksApp->>Bootstrapper: reflection → Initialize()
+    Bootstrapper->>Bootstrapper: Init Serilog
+    Bootstrapper->>Bootstrapper: Create Unity container
+    Bootstrapper->>Bootstrapper: Register Prism infrastructure
+    Bootstrapper->>Bootstrapper: Register services & views
+    Bootstrapper->>Bootstrapper: Set ContainerLocator
+  end
+
+  BimTasksApp->>BimTasksApp: RibbonBuilder.Build()
+
+  rect rgb(240, 253, 244)
+    Note over BimTasksApp,Bootstrapper: Phase 2 — Register Dockable Pane
+    BimTasksApp->>Bootstrapper: reflection → RegisterDockablePane()
+    Bootstrapper->>Revit: RegisterDockablePane(id, panel)
+    Bootstrapper-->>BimTasksApp: returns DockablePaneId
+  end
+
+  BimTasksApp->>Revit: Subscribe to Idling (one-shot)
+
+  Note over Revit: Revit becomes idle...
+
+  rect rgb(254, 249, 195)
+    Note over BimTasksApp,Bootstrapper: Phase 3 — OnFirstIdle
+    Revit->>BimTasksApp: Idling event
+    BimTasksApp->>BimTasksApp: Unsubscribe from Idling
+    BimTasksApp->>Bootstrapper: reflection → OnFirstIdle(UIApplication)
+    Bootstrapper->>Bootstrapper: Set UIApplication on RevitContextService
+    Bootstrapper->>Bootstrapper: Create CommandDispatcherService
+    Bootstrapper->>Bootstrapper: Create VoskVoiceCommandService
+    Bootstrapper->>Bootstrapper: Subscribe to ToggleFloatingToolbarEvent
+  end
+
+  Note over Revit: Ready for commands
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="callout-title">Why Three Phases?</div>
+    <div class="callout-body">
+      <ul style="margin:0; padding-left:1.2rem;">
+        <li style="margin-bottom:0.5rem;">
+          <strong>Phase 1 (Initialize):</strong> No <code>UIApplication</code> available yet &mdash;
+          only <code>UIControlledApplication</code>. Can register services and build UI,
+          but cannot create <code>ExternalEvent</code> or access active documents.
+        </li>
+        <li style="margin-bottom:0.5rem;">
+          <strong>Phase 2 (Dockable Pane):</strong> Must happen during <code>OnStartup</code> &mdash;
+          Revit does not allow pane registration after the startup window closes.
+        </li>
+        <li style="margin-bottom:0;">
+          <strong>Phase 3 (OnFirstIdle):</strong> First time we have a real <code>UIApplication</code>.
+          <code>ExternalEvent.Create()</code> must be called on the Revit main thread, so this
+          is where <code>CommandDispatcherService</code> gets created.
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Key files -->
+  <h4 style="font-size:0.82rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#6b7280; margin-top:1.5rem; margin-bottom:0.5rem;">Key Files</h4>
+  <div class="key-files">
+    <span class="key-file">BimTasksApp.cs</span>
+    <span class="key-file">Infrastructure/BimTasksBootstrapper.cs</span>
+    <span class="key-file">Infrastructure/BimTasksLoadContext.cs</span>
+  </div>
+
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     COMMAND EXECUTION FLOW
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+
+  <div class="section-header">
+    <span class="section-num">1.2</span>
+    <div>
+      <div class="section-title">Command Execution Flow</div>
+      <div class="section-desc">What happens when a user clicks a ribbon button</div>
+    </div>
+  </div>
+
+  <div class="diagram-wrap">
+    <div class="diagram-title">Ribbon Click &rarr; Handler Execution</div>
+    <div class="mermaid">
+graph LR
+  A["User clicks\nribbon button"] --> B["Revit calls\nProxyCommand.Execute()"]
+  B --> C["Load handler type\nfrom isolated ALC"]
+  C --> D["Activator.CreateInstance()\ncreates handler"]
+  D --> E["Reflection invoke\nHandler.Execute(UIApplication)"]
+  E --> F["Handler runs\n(transactions, UI, etc.)"]
+
+  style A fill:#f1f5f9,stroke:#94a3b8
+  style B fill:#1e3a5f,color:#fff
+  style C fill:#7c3aed,color:#fff
+  style E fill:#1e40af,color:#fff
+  style F fill:#166534,color:#fff
+    </div>
+  </div>
+
+  <p style="font-size:0.88rem; color:#374151; margin:1rem 0;">
+    Every ribbon button maps to a <strong>proxy command</strong> in the default ALC.
+    The proxy is a one-liner &mdash; it just declares the handler's class name.
+    All actual logic lives in the handler inside the isolated ALC.
+  </p>
+
+  <div style="background:#f8fafc; border:1px solid #e5e7eb; border-radius:8px; padding:1rem; margin:1rem 0; font-family:'JetBrains Mono',monospace; font-size:0.82rem; color:#1e293b; line-height:1.7;">
+    <span style="color:#6b7280;">// Default ALC — proxy command (one per ribbon button)</span><br/>
+    <span style="color:#7c3aed;">[Transaction(TransactionMode.Manual)]</span><br/>
+    <span style="color:#1e40af;">public class</span> SplitWallCommand : <span style="color:#1e40af;">ProxyCommand</span><br/>
+    { <span style="color:#1e40af;">protected override string</span> HandlerTypeName => <span style="color:#166534;">"SplitWallHandler"</span>; }<br/>
+    <br/>
+    <span style="color:#6b7280;">// Isolated ALC — the real handler</span><br/>
+    <span style="color:#1e40af;">public class</span> SplitWallHandler : <span style="color:#1e40af;">ICommandHandler</span><br/>
+    { <span style="color:#1e40af;">public void</span> Execute(<span style="color:#1e40af;">UIApplication</span> app) { <span style="color:#6b7280;">/* all the work */</span> } }
+  </div>
+
+  <div class="info-row">
+    <div class="info-box warning">
+      <span class="info-label">Gotcha</span>
+      <div class="info-text">
+        Handlers are created via <code>Activator.CreateInstance()</code> &mdash; they must have
+        a parameterless constructor. Dependencies are resolved inside <code>Execute()</code>
+        via <code>ContainerLocator.Container.Resolve&lt;T&gt;()</code>.
+      </div>
+    </div>
+    <div class="info-box note">
+      <span class="info-label">Proxy Files</span>
+      <div class="info-text">
+        Proxy commands are grouped by panel:
+        <code>WallCommands.cs</code>,
+        <code>StructureCommands.cs</code>,
+        <code>ScheduleCommands.cs</code>,
+        <code>BOQCommands.cs</code>,
+        <code>ToolCommands.cs</code>.
+      </div>
+    </div>
+  </div>
+
+  <div class="key-files" style="margin-top:1rem;">
+    <span class="key-file">Commands/Infrastructure/ProxyCommand.cs</span>
+    <span class="key-file">Commands/Proxies/*.cs</span>
+    <span class="key-file">Commands/Handlers/*.cs</span>
+  </div>
+
+</section>
+
+<div class="page-break"></div>
+
+<!-- ══════════════════════════════════════════════════════════
+     THREADING & COMMAND DISPATCHER
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+
+  <div class="section-header">
+    <span class="section-num">1.3</span>
+    <div>
+      <div class="section-title">Threading &amp; Command Dispatcher</div>
+      <div class="section-desc">How WPF events safely reach the Revit API</div>
+    </div>
+  </div>
+
+  <p style="font-size:0.88rem; color:#374151; margin-bottom:1rem;">
+    Revit's API is <strong>single-threaded</strong> &mdash; it can only be called from the main thread
+    during specific windows (inside <code>IExternalCommand.Execute()</code> or
+    <code>IExternalEventHandler.Execute()</code>). WPF buttons, voice commands, and dockable
+    panel interactions run on separate threads. The <code>CommandDispatcherService</code> bridges this gap.
+  </p>
+
+  <div class="diagram-wrap">
+    <div class="diagram-title">Thread-Safe Command Queue</div>
+    <div class="mermaid">
+sequenceDiagram
+  participant WPF as WPF Thread<br/>(button click / voice)
+  participant Queue as ConcurrentQueue
+  participant Revit as Revit Main Thread
+
+  WPF->>Queue: dispatcher.Enqueue(action)
+  WPF->>Revit: externalEvent.Raise()
+  Note over Revit: Revit becomes idle...
+  Revit->>Queue: Drain all queued actions
+  Queue-->>Revit: action(UIApplication)
+  Revit->>Revit: Execute on main thread
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="callout-title">When Is the Dispatcher Needed?</div>
+    <div class="callout-body">
+      <ul style="margin:0; padding-left:1.2rem;">
+        <li style="margin-bottom:0.3rem;"><strong>Needed:</strong> Floating toolbar button clicks, dockable panel actions, voice commands &mdash; anything triggered from WPF or a background thread.</li>
+        <li style="margin-bottom:0;"><strong>Not needed:</strong> Ribbon button clicks &mdash; these already run inside <code>IExternalCommand.Execute()</code> on Revit's main thread.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="key-files" style="margin-top:1rem;">
+    <span class="key-file">Services/CommandDispatcherService.cs</span>
+    <span class="key-file">Services/ICommandDispatcherService.cs</span>
+  </div>
+
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     EVENT SYSTEM
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+
+  <div class="section-header">
+    <span class="section-num">1.4</span>
+    <div>
+      <div class="section-title">Event System</div>
+      <div class="section-desc">Prism EventAggregator for decoupled UI coordination</div>
+    </div>
+  </div>
+
+  <p style="font-size:0.88rem; color:#374151; margin-bottom:1rem;">
+    Handlers and ViewModels communicate through Prism's <code>EventAggregator</code> &mdash;
+    publishers don't need a reference to subscribers. Four events are defined:
+  </p>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Event</th>
+        <th>Payload</th>
+        <th>Published By</th>
+        <th>Consumed By</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>ToggleFloatingToolbarEvent</code></td>
+        <td><code>object</code></td>
+        <td>ToggleToolbarHandler</td>
+        <td>BimTasksBootstrapper (creates/toggles FloatingToolbarWindow)</td>
+      </tr>
+      <tr>
+        <td><code>SwitchDockablePanelEvent</code></td>
+        <td><code>string</code> (view name)</td>
+        <td>ShowFilterTreeWindowHandler, CheckSelectedWallsHandler</td>
+        <td>BimTasksDockablePanelViewModel (navigates region)</td>
+      </tr>
+      <tr>
+        <td><code>ResetFilterTreeEvent</code></td>
+        <td><code>object</code></td>
+        <td>FilterTreeViewModel (after rebuild)</td>
+        <td>FilterTreeViewModel (re-initializes tree)</td>
+      </tr>
+      <tr>
+        <td><code>CalculateElementsEvent</code></td>
+        <td><code>object</code></td>
+        <td>CheckSelectedWallsHandler</td>
+        <td>ElementCalculationViewModel (runs calculation)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="info-row">
+    <div class="info-box gotcha">
+      <span class="info-label">Prism 9 Threading Gotcha</span>
+      <div class="info-text">
+        In Prism 9, <code>ThreadOption.UIThread</code> is <strong>async</strong> (unlike Prism 8).
+        For synchronous delivery, use <code>ThreadOption.PublisherThread</code>.
+        The floating toolbar subscription uses this to avoid race conditions.
+      </div>
+    </div>
+  </div>
+
+  <div class="key-files" style="margin-top:1rem;">
+    <span class="key-file">Events/BimTasksEvents.cs</span>
+  </div>
+
+</section>
+
+<div class="page-break"></div>
+
+<!-- ══════════════════════════════════════════════════════════
+     KEY SERVICES
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+
+  <div class="section-header">
+    <span class="section-num">1.5</span>
+    <div>
+      <div class="section-title">Key Services</div>
+      <div class="section-desc">Singleton services registered in the Unity container</div>
+    </div>
+  </div>
+
+  <div class="service-grid">
+
+    <div class="service-card">
+      <div class="service-name">RevitContextService</div>
+      <div class="service-desc">
+        Holds <code>UIApplication</code> (set in OnFirstIdle).
+        <code>UIDocument</code> is a <strong>computed property</strong> that always returns the
+        active document &mdash; never cached, because the user can switch documents.
+      </div>
+    </div>
+
+    <div class="service-card">
+      <div class="service-name">CommandDispatcherService</div>
+      <div class="service-desc">
+        Thread-safe action queue using <code>ExternalEvent</code>.
+        Bridges WPF/voice threads to the Revit main thread.
+        See section 1.3.
+      </div>
+    </div>
+
+    <div class="service-card">
+      <div class="service-name">ScheduleExcelExportService</div>
+      <div class="service-desc">
+        Professional Excel export using EPPlus. Handles multi-schedule export
+        (single file or separate files), column formatting, merged headers, and
+        auto-fit. Used by the Export Schedule command.
+      </div>
+    </div>
+
+    <div class="service-card">
+      <div class="service-name">ScheduleExcelRoundtripService</div>
+      <div class="service-desc">
+        Exports a schedule to a temp Excel file, opens it for editing,
+        then reimports changes on user confirmation. Used by the Edit In Excel command.
+      </div>
+    </div>
+
+    <div class="service-card">
+      <div class="service-name">DataExtractorService</div>
+      <div class="service-desc">
+        Extracts all model elements into <code>BimElementDto</code> objects and serializes
+        to JSON. Includes validation comparison against Revit schedule totals.
+        Used by the Web App Data Extractor command.
+      </div>
+    </div>
+
+    <div class="service-card">
+      <div class="service-name">VoskVoiceCommandService</div>
+      <div class="service-desc">
+        Offline voice recognition using Vosk + NAudio. Grammar-constrained to recognize
+        command names. Optional &mdash; creation is wrapped in try/catch so the plugin works
+        even if Vosk model files are missing.
+      </div>
+    </div>
+
+    <div class="service-card">
+      <div class="service-name">ElementCalculationService</div>
+      <div class="service-desc">
+        Calculates area and volume for selected Revit elements.
+        Results are displayed in the dockable panel's ElementCalculationView.
+      </div>
+    </div>
+
+    <div class="service-card">
+      <div class="service-name">UniformatDataService</div>
+      <div class="service-desc">
+        Provides Uniformat classification code lookups.
+        Displayed in a modeless window for reference.
+      </div>
+    </div>
+
+  </div>
+
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     RIBBON LAYOUT
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+
+  <div class="section-header">
+    <span class="section-num">1.6</span>
+    <div>
+      <div class="section-title">Ribbon Layout</div>
+      <div class="section-desc">How commands are organized in the Revit ribbon</div>
+    </div>
+  </div>
+
+  <div class="diagram-wrap">
+    <div class="diagram-title">BimTasks Ribbon Tab &mdash; 5 Panels</div>
+    <div class="mermaid">
+graph LR
+  subgraph TAB["BimTasks Tab"]
+    direction LR
+    subgraph P1["Walls"]
+      W1["Sync Phases"]
+      W2["Copy Linked"]
+      W3["Wall To Floors"]
+      W4["Wall Height"]
+      W5["Split Wall"]
+      W6["Detect Overlaps"]
+      W7["Cladding ▾"]
+      W8["Window Families"]
+    end
+    subgraph P2["Structure"]
+      S1["Beams To Ground"]
+      S2["Join Walls & Floors"]
+      S3["Split Floor"]
+    end
+    subgraph P3["Schedules"]
+      SC1["Export Schedule"]
+      SC2["Edit In Excel"]
+      SC3["Import Key Schedules"]
+    end
+    subgraph P4["BOQ"]
+      B1["BOQ Setup"]
+      B2["BOQ Schedules"]
+      B3["BOQ AutoFill"]
+      B4["BOQ Calc Price"]
+      B5["Contract Sections"]
+    end
+    subgraph P5["Tools"]
+      T1["Create Similar ▾"]
+      T2["Filter Tree"]
+      T3["Calc Area"]
+      T4["Uniformat"]
+      T5["Copy From Link"]
+      T6["...+6 more"]
+    end
+  end
+
+  style TAB fill:#f8fafc,stroke:#94a3b8
+  style P1 fill:#dbeafe,stroke:#3b82f6
+  style P2 fill:#d1fae5,stroke:#10b981
+  style P3 fill:#fef3c7,stroke:#f59e0b
+  style P4 fill:#ede9fe,stroke:#8b5cf6
+  style P5 fill:#fce7f3,stroke:#ec4899
+    </div>
+  </div>
+
+  <p style="font-size:0.85rem; color:#6b7280; margin-top:0.5rem;">
+    <strong>▾</strong> = split button (dropdown with sub-commands).
+    Cladding has 3 variants (Both/External/Internal).
+    Create Similar has 2 (Create Similar + Piles From DWG).
+  </p>
+
+  <div class="key-files" style="margin-top:1rem;">
+    <span class="key-file">Ribbon/RibbonBuilder.cs</span>
+    <span class="key-file">Ribbon/RibbonConstants.cs</span>
+  </div>
+
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     ARCHITECTURE ISSUES
+     ══════════════════════════════════════════════════════════ -->
+<section class="section">
+
+  <div class="section-header">
+    <span class="section-num">1.7</span>
+    <div>
+      <div class="section-title">Architecture Notes &amp; Observations</div>
+      <div class="section-desc">Patterns to be aware of when working in this codebase</div>
+    </div>
+  </div>
+
+  <div class="improve-card">
+    <div class="improve-title">Reflection-Heavy Bridge</div>
+    <div class="improve-body">
+      <p>
+        All communication between default and isolated ALC goes through reflection &mdash;
+        no compile-time type safety. If a handler class is renamed or its <code>Execute</code>
+        method signature changes, the error only surfaces at runtime when the user clicks
+        the button. A shared interface assembly (loaded in both ALCs) could provide
+        compile-time guarantees.
+      </p>
+    </div>
+  </div>
+
+  <div class="improve-card">
+    <div class="improve-title">Service Resolution Inside Execute()</div>
+    <div class="improve-body">
+      <p>
+        Handlers resolve dependencies via <code>ContainerLocator.Container.Resolve&lt;T&gt;()</code>
+        inside their <code>Execute()</code> method (service locator pattern). This works but
+        makes dependencies invisible &mdash; you can't tell what a handler needs without reading
+        the method body. Constructor injection would be cleaner but requires changes to the
+        proxy infrastructure.
+      </p>
+    </div>
+  </div>
+
+  <div class="improve-card">
+    <div class="improve-title">Floating Toolbar Lifecycle</div>
+    <div class="improve-body">
+      <p>
+        The floating toolbar window is created and cached in <code>BimTasksBootstrapper</code>
+        as a field. Toggling shows/hides it. If the window is closed via the X button (by the
+        user or Windows), the cached reference may point to a disposed window. The toolbar
+        handler should check <code>IsLoaded</code> before toggling visibility.
+      </p>
+    </div>
+  </div>
+
+  <div class="callout" style="margin-top:1.5rem;">
+    <div class="callout-title">What Works Well</div>
+    <div class="callout-body">
+      <ul style="margin:0; padding-left:1.2rem;">
+        <li style="margin-bottom:0.3rem;">
+          ALC isolation is solid &mdash; no DLL conflicts reported with Enscape, Dynamo, or pyRevit.
+        </li>
+        <li style="margin-bottom:0.3rem;">
+          The <code>CommandDispatcherService</code> pattern is clean and correctly handles
+          the Revit threading model.
+        </li>
+        <li style="margin-bottom:0;">
+          Three-phase initialization correctly respects Revit's registration windows.
+        </li>
+      </ul>
+    </div>
+  </div>
+
+</section>
+
+</div><!-- /container -->
+</body>
+</html>

@@ -14,6 +14,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <TextBlock Grid.Row="0"
@@ -34,7 +35,24 @@
                  SelectionMode="Single"
                  MouseDoubleClick="ScheduleList_MouseDoubleClick"/>
 
-        <StackPanel Grid.Row="3"
+        <!-- Export mode (visible only for multi-select) -->
+        <GroupBox Grid.Row="3"
+                  x:Name="ExportModeGroup"
+                  Header="Export Mode"
+                  Margin="0,8,0,0"
+                  Visibility="Collapsed">
+            <StackPanel Margin="4">
+                <RadioButton x:Name="SingleFileRadio"
+                             Content="One Excel file (multiple sheets)"
+                             IsChecked="True"
+                             Margin="0,2"/>
+                <RadioButton x:Name="SeparateFilesRadio"
+                             Content="Separate Excel files"
+                             Margin="0,2"/>
+            </StackPanel>
+        </GroupBox>
+
+        <StackPanel Grid.Row="4"
                     Orientation="Horizontal"
                     HorizontalAlignment="Right"
                     Margin="0,12,0,0">

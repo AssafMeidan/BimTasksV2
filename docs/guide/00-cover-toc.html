@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BimTasksV2 — Developer Guide</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<div class="container">
+
+<!-- ── COVER PAGE ─────────────────────────────────────────── -->
+<div class="cover">
+  <h1>BimTasksV2 — Developer Guide</h1>
+  <div class="subtitle">Revit 2025 Add-in &mdash; Architecture &amp; Command Reference</div>
+  <div class="subtitle">37 Commands &middot; 5 Ribbon Panels &middot; Full Functionality Map</div>
+  <div class="date">March 2026</div>
+  <div class="meta">Stack: .NET 8 &middot; Revit API 2025 &middot; Prism 9 / Unity &middot; WPF &middot; Vosk</div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- ── TABLE OF CONTENTS ───────────────────────────────────── -->
+<nav class="toc">
+  <h2>Table of Contents</h2>
+
+  <div class="toc-item">
+    <span class="toc-num">1</span>
+    <span class="toc-title"><a href="01-architecture.html" style="color:inherit; text-decoration:none;">Architecture Overview</a></span>
+    <span class="toc-detail">ALC isolation &middot; command flow &middot; initialization &middot; key services</span>
+  </div>
+
+  <div class="toc-item">
+    <span class="toc-num">2</span>
+    <span class="toc-title"><a href="02-walls.html" style="color:inherit; text-decoration:none;">Walls</a></span>
+    <span class="toc-detail">Sync Phases &middot; Copy Linked &middot; Height &middot; Split &middot; Overlaps &middot; Cladding &middot; Trim Corners &middot; Window Families</span>
+  </div>
+
+  <div class="toc-item">
+    <span class="toc-num">3</span>
+    <span class="toc-title"><a href="03-structure.html" style="color:inherit; text-decoration:none;">Structure</a></span>
+    <span class="toc-detail">Beams To Ground &middot; Join Walls &amp; Floors &middot; Split Floor &middot; Join Beams to Walls</span>
+  </div>
+
+  <div class="toc-item">
+    <span class="toc-num">4</span>
+    <span class="toc-title"><a href="04-schedules.html" style="color:inherit; text-decoration:none;">Schedules</a></span>
+    <span class="toc-detail">Export to Excel &middot; Edit in Excel &middot; Import Key Schedules</span>
+  </div>
+
+  <div class="toc-item">
+    <span class="toc-num">5</span>
+    <span class="toc-title"><a href="05-boq.html" style="color:inherit; text-decoration:none;">BOQ (Bill of Quantities)</a></span>
+    <span class="toc-detail">Setup &middot; Create Schedules &middot; AutoFill Qty &middot; Calc Price &middot; Seifei Choze</span>
+  </div>
+
+  <div class="toc-item">
+    <span class="toc-num">6</span>
+    <span class="toc-title"><a href="06-tools.html" style="color:inherit; text-decoration:none;">Tools</a></span>
+    <span class="toc-detail">Filter Tree &middot; Calc Area &middot; Uniformat &middot; Copy From Link &middot; Dockable Panel &middot; Toolbar &middot; Export JSON &middot; Voice &middot; DWG Floors &middot; Filter Legend</span>
+  </div>
+
+  <div class="toc-item">
+    <span class="toc-num">7</span>
+    <span class="toc-title"><a href="07-issues.html" style="color:inherit; text-decoration:none;">Cross-Cutting Issues &amp; Improvements</a></span>
+    <span class="toc-detail">Architectural debt &middot; systemic patterns &middot; recommended fixes</span>
+  </div>
+</nav>
+
+<!-- ── STATUS KEY ──────────────────────────────────────────── -->
+<div class="section">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Status Key &mdash; Used Throughout This Guide</div>
+    </div>
+  </div>
+
+  <div style="display:flex; gap:1.5rem; flex-wrap:wrap;">
+    <div style="display:flex; align-items:center; gap:0.5rem;">
+      <span class="status status-solid">Solid</span>
+      <span style="color:#444; font-size:0.85rem;">Works reliably, no known issues</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:0.5rem;">
+      <span class="status status-sketchy">Sketchy</span>
+      <span style="color:#444; font-size:0.85rem;">Works but has edge cases or incomplete error handling</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:0.5rem;">
+      <span class="status status-broken">Broken / Stub</span>
+      <span style="color:#444; font-size:0.85rem;">Not functional or not yet implemented</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:0.5rem;">
+      <span class="status status-improve">Needs Improvement</span>
+      <span style="color:#444; font-size:0.85rem;">Functional but has clear architectural or UX debt</span>
+    </div>
+  </div>
+
+  <div style="margin-top:1.5rem;">
+    <div style="font-size:0.85rem; color:#6b7280; line-height:1.6;">
+      <strong>Issue cards</strong> appear at the end of each command card when applicable.
+      <span style="display:inline-block; width:12px; height:12px; background:#fff5f5; border:1px solid #fca5a5; border-radius:3px; vertical-align:middle; margin:0 0.2rem;"></span> red = bug or unsafe pattern,
+      <span style="display:inline-block; width:12px; height:12px; background:#eef2ff; border:1px solid #a5b4fc; border-radius:3px; vertical-align:middle; margin:0 0.2rem;"></span> blue = improvement idea.
+    </div>
+  </div>
+</div>
+
+<!-- ── QUICK STATS ─────────────────────────────────────────── -->
+<div class="section">
+  <div class="section-header">
+    <div>
+      <div class="section-title">At a Glance</div>
+    </div>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Panel</th>
+        <th>Commands</th>
+        <th>Key Helpers / Services</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="font-weight:600;">Walls</td>
+        <td>10</td>
+        <td><code>WallSplitterEngine</code> <code>OverlappingWallsDetector</code> <code>CladdingWallCreator</code> <code>WallJoinReplicator</code></td>
+      </tr>
+      <tr>
+        <td style="font-weight:600;">Structure</td>
+        <td>4</td>
+        <td><code>FloorSplitterEngine</code> <code>FloorLayerAnalyzer</code> <code>JoinGeometryUtils</code></td>
+      </tr>
+      <tr>
+        <td style="font-weight:600;">Schedules</td>
+        <td>3</td>
+        <td><code>ScheduleExcelExportService</code> <code>ScheduleExcelRoundtripService</code></td>
+      </tr>
+      <tr>
+        <td style="font-weight:600;">BOQ</td>
+        <td>5</td>
+        <td><code>SharedParameterHelper</code> <code>BOQScheduleBuilder</code></td>
+      </tr>
+      <tr>
+        <td style="font-weight:600;">Tools</td>
+        <td>11+</td>
+        <td><code>LegendBuilder</code> <code>DwgGeometryExtractor</code> <code>DataExtractorService</code> <code>VoskVoiceService</code></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+</div><!-- /container -->
+</body>
+</html>

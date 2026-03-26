@@ -2,6 +2,7 @@
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:prism="http://prismlibrary.com/"
+      xmlns:vm="clr-namespace:BimTasksV2.ViewModels"
       prism:ViewModelLocator.AutoWireViewModel="True"
       d:DesignHeight="600" d:DesignWidth="350"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -10,63 +11,118 @@
       Background="#FAFAFA">
 
     <Page.Resources>
-        <Style x:Key="CloseTabButton" TargetType="Button">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="4,1"/>
-            <Setter Property="Margin" Value="6,0,0,0"/>
-            <Setter Property="FontSize" Value="11"/>
-            <Setter Property="Foreground" Value="#888"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="{TemplateBinding Background}"
-                                CornerRadius="3" Padding="{TemplateBinding Padding}">
-                            <TextBlock Text="✕" FontSize="{TemplateBinding FontSize}"
-                                       Foreground="{TemplateBinding Foreground}"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#22000000"/>
-                                <Setter Property="Foreground" Value="#333"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+        <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
     </Page.Resources>
 
     <Grid>
-        <!-- Tabbed content area -->
-        <TabControl ItemsSource="{Binding Tabs}"
-                    SelectedItem="{Binding SelectedTab}"
-                    Background="Transparent"
-                    BorderThickness="0,1,0,0"
-                    BorderBrush="#DDD"
-                    Padding="0">
-            <TabControl.ItemTemplate>
-                <DataTemplate>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{Binding Title}" VerticalAlignment="Center" FontSize="12"/>
-                        <Button Style="{StaticResource CloseTabButton}"
-                                Command="{Binding DataContext.CloseTabCommand, RelativeSource={RelativeSource AncestorType=TabControl}}"
-                                CommandParameter="{Binding}"/>
-                    </StackPanel>
-                </DataTemplate>
-            </TabControl.ItemTemplate>
-            <TabControl.ContentTemplate>
-                <DataTemplate>
-                    <ContentPresenter Content="{Binding Content}"/>
-                </DataTemplate>
-            </TabControl.ContentTemplate>
-        </TabControl>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
 
-        <!-- Empty state when no tabs are open -->
-        <TextBlock Text="Click a command in the BimTasks toolbar to display content here."
+        <!-- Header bar -->
+        <Border Grid.Row="0" Background="#1565C0" Padding="10,8">
+            <TextBlock Text="{Binding PanelTitle}"
+                       FontWeight="SemiBold" FontSize="14"
+                       Foreground="White"/>
+        </Border>
+
+        <!-- Tab strip (hidden when ≤1 tab) -->
+        <ItemsControl Grid.Row="1"
+                       ItemsSource="{Binding Tabs}"
+                       Visibility="{Binding TabStripVisibility}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <WrapPanel Background="#E3F2FD"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Border Margin="0" Padding="0"
+                            BorderBrush="#BBDEFB" BorderThickness="0,0,1,0">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="#E3F2FD"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                        <Setter Property="Background" Value="White"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="{Binding DisplayName}"
+                                    Command="{Binding DataContext.SwitchTabCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                    CommandParameter="{Binding Key}"
+                                    Padding="10,5" BorderThickness="0" Cursor="Hand"
+                                    FontSize="11">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Setter Property="Foreground" Value="#1565C0"/>
+                                        <Setter Property="FontWeight" Value="Normal"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                            </DataTrigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#BBDEFB"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                            <Button Content="&#xD7;"
+                                    Command="{Binding DataContext.CloseTabCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                    CommandParameter="{Binding Key}"
+                                    Padding="4,5,6,5" BorderThickness="0" Cursor="Hand"
+                                    FontSize="11" Foreground="#999"
+                                    Visibility="{Binding CanClose, Converter={StaticResource BoolToVisConverter}}">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Foreground" Value="#D32F2F"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- Dynamic content area -->
+        <ContentControl Grid.Row="2"
+                        Content="{Binding CurrentView}"
+                        HorizontalContentAlignment="Stretch"
+                        VerticalContentAlignment="Stretch"/>
+
+        <!-- Empty state when no view is loaded -->
+        <TextBlock Grid.Row="2"
+                   Text="No content loaded."
                    HorizontalAlignment="Center"
                    VerticalAlignment="Center"
                    TextWrapping="Wrap"
